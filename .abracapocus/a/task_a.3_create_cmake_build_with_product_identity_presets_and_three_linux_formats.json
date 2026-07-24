@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "task_id": "a.3",
+  "phase": "A",
+  "phase_id": "a",
+  "title": "Create CMake build with product identity presets and three Linux formats",
+  "description": "Create CMakeLists.txt and CMakePresets.json at the repository root so the four shell sources build as VST3, LV2, and Standalone on Linux.\n\nBefore editing, inspect:\n- Source/PluginProcessor.h, Source/PluginProcessor.cpp, Source/PluginEditor.h, Source/PluginEditor.cpp (created by a.1 and a.2) for the exact target source list.\n- ./JUCE/CMakeLists.txt and ./JUCE/extras/Build/CMake/JUCEUtils.cmake for the juce_add_plugin argument names actually supported by the pinned JUCE revision 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2, in particular PRODUCT_NAME, COMPANY_NAME, VERSION, PLUGIN_MANUFACTURER_CODE, PLUGIN_CODE, BUNDLE_ID, LV2URI, FORMATS, IS_SYNTH, NEEDS_MIDI_INPUT, NEEDS_MIDI_OUTPUT, COPY_PLUGIN_AFTER_BUILD.\n- ./.gitmodules to confirm JUCE is a submodule at ./JUCE.\n\nImplement exactly:\n1. CMakeLists.txt starts with cmake_minimum_required(VERSION 3.22) and project(ShredSpace VERSION 1.0.0 LANGUAGES CXX). Set CMAKE_CXX_STANDARD 20 and CMAKE_CXX_STANDARD_REQUIRED ON.\n2. add_subdirectory(JUCE) to consume the existing submodule. Do not use FetchContent, do not download JUCE, do not modify anything inside JUCE/.\n3. juce_add_plugin(ShredSpace ...) with EXACTLY these binding identity values: PRODUCT_NAME \"ShredSpace\", COMPANY_NAME \"nSpace Systems\", VERSION 1.0.0, PLUGIN_MANUFACTURER_CODE NSPC, PLUGIN_CODE ShSp, BUNDLE_ID com.nspacesystems.shredspace, LV2URI urn:nspacesystems:plugin:shredspace, FORMATS VST3 LV2 Standalone, IS_SYNTH FALSE, NEEDS_MIDI_INPUT FALSE, NEEDS_MIDI_OUTPUT FALSE, COPY_PLUGIN_AFTER_BUILD FALSE. These identity strings and codes are frozen; do not alter their spelling or case.\n4. target_sources(ShredSpace PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp).\n5. juce_generate_juce_header(ShredSpace) OR target_compile_definitions with JUCE_VST3_CAN_REPLACE_VST2=0, JUCE_WEB_BROWSER=0, JUCE_USE_CURL=0, JUCE_DISPLAY_SPLASH_SCREEN=0 \u2014 include those four compile definitions either way.\n6. target_link_libraries(ShredSpace PRIVATE juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags).\n7. enable_testing() and include(CTest) so later phases can register a console unit-test runner through CTest. Do not add any test target in this task.\n8. CMakePresets.json with \"version\": 3 and exactly two configure presets: \"linux-release\" (generator Ninja or Unix Makefiles, CMAKE_BUILD_TYPE Release, binaryDir \"${sourceDir}/build/linux-release\") and \"windows-msvc\" (generator \"Visual Studio 17 2022\", architecture x64, binaryDir \"${sourceDir}/build/windows-msvc\"). The windows-msvc preset is configuration only and is not built in this plan. Add matching build presets named linux-release and windows-msvc.\n\nAcceptance is proven by actually configuring and building: run `cmake --preset linux-release` and `cmake --build build/linux-release` and confirm both exit zero. Because no C++ language adapter exists in the abracapocus registry, use these explicit cmake commands only \u2014 never make or cppcheck.",
+  "acceptance_criteria": [
+    "CMakeLists.txt calls juce_add_plugin with PRODUCT_NAME \"ShredSpace\", COMPANY_NAME \"nSpace Systems\", VERSION 1.0.0, PLUGIN_MANUFACTURER_CODE NSPC, PLUGIN_CODE ShSp, BUNDLE_ID com.nspacesystems.shredspace, and LV2URI urn:nspacesystems:plugin:shredspace",
+    "CMakeLists.txt sets FORMATS VST3 LV2 Standalone and CMAKE_CXX_STANDARD 20",
+    "CMakeLists.txt consumes JUCE via add_subdirectory(JUCE) and does not use FetchContent or download JUCE",
+    "CMakeLists.txt target_sources lists Source/PluginProcessor.cpp and Source/PluginEditor.cpp",
+    "CMakeLists.txt calls enable_testing() and include(CTest)",
+    "CMakePresets.json defines configure presets named exactly linux-release and windows-msvc, with linux-release binaryDir ${sourceDir}/build/linux-release and CMAKE_BUILD_TYPE Release",
+    "cmake --preset linux-release exits with status 0",
+    "cmake --build build/linux-release exits with status 0",
+    "Only CMakeLists.txt and CMakePresets.json are created or modified by this task"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "CMakeLists.txt",
+    "CMakePresets.json"
+  ],
+  "forbidden_changes": [
+    "create or modify any file under JUCE/",
+    "modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, Source/PluginEditor.h, or Source/PluginEditor.cpp",
+    "create or modify scripts/build_all.sh, .gitignore, or anything under docs/",
+    "use FetchContent, ExternalProject, or any network download to obtain JUCE",
+    "add any new third-party dependency, including Catch2 or GoogleTest",
+    "add a test target or test source files in this phase task",
+    "change the frozen identity values ShredSpace, nSpace Systems, NSPC, ShSp, com.nspacesystems.shredspace, or urn:nspacesystems:plugin:shredspace",
+    "add AU, AAX, VST2, or Unity to FORMATS",
+    "run make or cppcheck instead of explicit cmake commands"
+  ],
+  "allowed_symbols": [
+    "ShredSpace",
+    "juce_add_plugin",
+    "juce_generate_juce_header",
+    "target_sources",
+    "target_compile_definitions",
+    "target_link_libraries",
+    "enable_testing",
+    "linux-release",
+    "windows-msvc"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose Ninja or Unix Makefiles as the linux-release generator",
+      "choose between juce_generate_juce_header and direct module includes",
+      "order the CMake commands within the file"
+    ],
+    "forbidden": [
+      "introduce a package manager or dependency fetcher",
+      "vendor a copy of JUCE outside the submodule",
+      "add plugin formats beyond VST3, LV2, and Standalone",
+      "define a unit-test target before phase-appropriate tasks"
+    ]
+  },
+  "dependencies": [
+    "a.2"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

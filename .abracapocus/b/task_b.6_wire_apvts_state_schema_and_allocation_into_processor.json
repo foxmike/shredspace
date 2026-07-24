@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "b.6",
+  "phase": "B",
+  "phase_id": "b",
+  "title": "Wire APVTS state schema and allocation into processor",
+  "description": "Modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, and CMakeLists.txt ONLY. This is the phase's serialized fan-in integration write.\n\nBefore editing, inspect:\n- Source/PluginProcessor.h and Source/PluginProcessor.cpp (phase a skeleton)\n- CMakeLists.txt (existing juce_add_plugin target and target_sources block for ShredSpace)\n- Source/Parameters/ParameterIDs.h, ParameterLayout.h, ParameterSnapshot.h\n\nCHANGES:\n1. PluginProcessor.h: include the Parameters headers. Add members `juce::AudioProcessorValueTreeState apvts;` and `shredspace::ParameterSnapshot parameterSnapshot;`. Add a public accessor `juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }`.\n2. PluginProcessor.cpp constructor: initialize apvts in the member initializer list as `apvts (*this, nullptr, juce::Identifier (shredspace::paramids::kApvtsType), shredspace::createParameterLayout())`.\n3. prepareToPlay: call `parameterSnapshot.prepare (sampleRate, samplesPerBlock, apvts);` so all snapshot allocation happens here, before any audio runs. Do not add any other allocation to processBlock.\n4. processBlock: add `juce::ScopedNoDenormals noDenormals;` as the first statement if not already present, and call `parameterSnapshot.updateFromParameters();` once at the top of the block. Do not add DSP behavior in this task; the existing pass-through/skeleton behavior stays.\n5. getStateInformation: copy the APVTS state ValueTree, wrap or tag it with the schema version by setting the property shredspace::paramids::kSchemaVersionProperty to shredspace::paramids::kStateSchemaVersion on the copied tree, and write it to the destination via juce::MemoryOutputStream / ValueTree::writeToStream (or copyXmlToBinary of the tree's XML \u2014 pick one and use it consistently in both directions).\n6. setStateInformation: read the tree back, verify the tree type matches shredspace::paramids::kApvtsType, read the schema version property, and if the version is absent or unrecognized, leave current parameters untouched rather than applying garbage. On a matching version, replace the APVTS state. This must be message-thread-safe and must not be callable from the audio thread.\n7. CMakeLists.txt: add Source/Parameters/ParameterLayout.cpp and Source/Parameters/ParameterSnapshot.cpp (and the headers, if headers are listed) to the existing ShredSpace target_sources block. Do not create new targets, do not add a test target (task b.7 owns that), do not change the project identity (ShredSpace, nSpace Systems, 1.0.0, NSPC, ShSp, com.nspacesystems.shredspace, urn:nspacesystems:plugin:shredspace), and do not change the JUCE submodule pin.\n\nCONSTRAINTS: no heap allocation, locks, file IO, string construction, GUI calls, or buffer resizing inside processBlock. No third-party dependency. No artist or song names.",
+  "acceptance_criteria": [
+    "Source/PluginProcessor.h declares an AudioProcessorValueTreeState member and a shredspace::ParameterSnapshot member with a getValueTreeState accessor",
+    "Source/PluginProcessor.cpp constructs the APVTS with shredspace::createParameterLayout() and the kApvtsType identifier",
+    "Source/PluginProcessor.cpp prepareToPlay calls parameterSnapshot.prepare and processBlock begins with juce::ScopedNoDenormals followed by parameterSnapshot.updateFromParameters()",
+    "Source/PluginProcessor.cpp getStateInformation writes the schema version property and setStateInformation rejects an absent or unrecognized schema version without altering current parameters",
+    "CMakeLists.txt lists Source/Parameters/ParameterLayout.cpp and Source/Parameters/ParameterSnapshot.cpp in the ShredSpace target_sources block",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpace_VST3 succeeds",
+    "processBlock in Source/PluginProcessor.cpp contains no heap allocation, locking, file IO, string construction, or buffer resizing",
+    "No file outside Source/PluginProcessor.h, Source/PluginProcessor.cpp, and CMakeLists.txt is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/PluginProcessor.h",
+    "Source/PluginProcessor.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify Source/Parameters/ParameterIDs.h, ParameterLayout.h, ParameterLayout.cpp, ParameterSnapshot.h, or ParameterSnapshot.cpp",
+    "modify Source/PluginEditor.h or Source/PluginEditor.cpp",
+    "modify CMakePresets.json",
+    "modify anything under JUCE/ or change the JUCE submodule pin",
+    "change the plugin name, vendor, version, manufacturer code, plugin code, bundle identifier, or LV2 URI",
+    "add a test target or CTest registration (owned by task b.7)",
+    "add DSP processing to processBlock",
+    "allocate, lock, or construct strings inside processBlock",
+    "add any third-party dependency"
+  ],
+  "allowed_symbols": [
+    "apvts",
+    "parameterSnapshot",
+    "getValueTreeState",
+    "prepareToPlay",
+    "processBlock",
+    "getStateInformation",
+    "setStateInformation"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose ValueTree binary streaming or XML binary serialization for state, used consistently in both directions",
+      "choose where the schema version property is attached on the state tree"
+    ],
+    "forbidden": [
+      "introduce a separate state-manager class or new source files",
+      "change the APVTS parameter layout",
+      "restructure the CMake target or add new targets"
+    ]
+  },
+  "dependencies": [
+    "b.5"
+  ],
+  "task_timeout_seconds": 2700,
+  "verification_commands": []
+}

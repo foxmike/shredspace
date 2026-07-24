@@ -1,0 +1,36 @@
+{
+  "verification": {
+    "checks": [
+      {
+        "name": "cmake_configure",
+        "command": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "build",
+          "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+        ]
+      },
+      {
+        "name": "cmake_build",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "-j",
+          "4"
+        ]
+      },
+      {
+        "name": "ctest_analysis",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build",
+          "--output-on-failure"
+        ]
+      }
+    ]
+  }
+}

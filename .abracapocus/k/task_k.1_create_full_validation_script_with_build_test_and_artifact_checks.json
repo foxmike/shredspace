@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task_id": "k.1",
+  "phase": "K",
+  "phase_id": "k",
+  "title": "Create full validation script with build test and artifact checks",
+  "description": "Create scripts/validate_plugin.sh: a single paste-and-run Bash script that validates the ShredSpace 1.0 Linux release end to end with zero editing and no placeholders.\n\nBefore editing, inspect:\n- CMakeLists.txt (target names for the VST3, LV2, and Standalone artefacts, the juce_add_plugin block, the unit-test console runner target, and the enable_testing()/add_test registrations)\n- CMakePresets.json (the exact configure preset name linux-release and its binaryDir, plus the windows-msvc configuration-only preset which this script must NOT invoke)\n- docs/verification/ (existing phase verification documents, for the command-matrix format phase k.3 will consume)\n\nRequired script behaviour, all of it mandatory:\n1. Shebang #!/usr/bin/env bash. Do NOT use 'set -e' anywhere: the script must run every stage and report per-stage results even after a failure. Use an explicit integer failure counter and per-stage status capture instead.\n2. Resolve the repository root from the script's own location (dirname of BASH_SOURCE) and cd there, so the script works when invoked from any working directory.\n3. Stage CONFIGURE: run 'cmake --preset linux-release' and record its exit status.\n4. Stage BUILD: run 'cmake --build' against the linux-release build directory (as defined by CMakePresets.json) building all three Linux targets (VST3, LV2, Standalone), and record its exit status.\n5. Stage TESTS: run the complete unit-test suite via 'ctest' against the linux-release build directory with --output-on-failure, and propagate the failure into the exit status. A non-zero ctest status must make the script exit non-zero.\n6. Stage ARTIFACTS: verify existence of the built VST3 bundle, the LV2 bundle, and the Standalone executable under the linux-release build tree, using the actual paths produced by the CMake configuration inspected above. Print one explicit PASS or FAIL line per artefact naming the artefact and its full path.\n7. Final SUMMARY: print a summary block listing every stage (configure, build, tests, each artefact) with its PASS/FAIL result and a total failure count, then 'exit 0' when the failure count is zero and 'exit 1' otherwise.\n8. Every command the script runs must be echoed before it runs so that phase k.3 can transcribe the real executed command matrix.\n9. The script must not invoke any Windows/MSVC preset, must not modify tracked repository files, must not touch anything under JUCE/, and must not require any third-party tool beyond bash, cmake, and ctest.\n\nMake the file executable (chmod +x equivalent: create it with mode 0755 or set the executable bit).",
+  "acceptance_criteria": [
+    "scripts/validate_plugin.sh exists and is executable",
+    "bash -n scripts/validate_plugin.sh passes with no syntax errors",
+    "scripts/validate_plugin.sh contains no 'set -e' line",
+    "scripts/validate_plugin.sh invokes cmake --preset linux-release, cmake --build against the linux-release build directory, and ctest with --output-on-failure",
+    "scripts/validate_plugin.sh prints an explicit PASS or FAIL line for the VST3 bundle, the LV2 bundle, and the Standalone executable",
+    "scripts/validate_plugin.sh prints a final summary block and exits non-zero when any stage or artefact check fails",
+    "scripts/validate_plugin.sh contains no placeholder text such as TODO, FIXME, <path>, or CHANGEME",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "scripts/validate_plugin.sh"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt",
+    "modify CMakePresets.json",
+    "modify any file under JUCE/",
+    "modify any file under Source/ or tests/",
+    "invoke or reference the windows-msvc preset as a build step",
+    "use 'set -e', 'set -o errexit', or any construct that aborts before the summary is printed",
+    "add new third-party dependencies or require tools other than bash, cmake, and ctest",
+    "hardcode absolute machine-specific paths such as /home/<user>",
+    "introduce placeholder values requiring operator editing"
+  ],
+  "allowed_symbols": [
+    "run_stage",
+    "check_artifact",
+    "print_summary",
+    "FAILURES",
+    "REPO_ROOT",
+    "BUILD_DIR"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose local shell function and variable names for stage running and artefact checking",
+      "choose the exact wording of PASS/FAIL and summary output lines",
+      "derive the build directory path from the linux-release preset's binaryDir"
+    ],
+    "forbidden": [
+      "change the CMake preset names or build layout",
+      "add a Windows build stage",
+      "introduce a test framework or runner other than ctest",
+      "make the script interactive or require arguments"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

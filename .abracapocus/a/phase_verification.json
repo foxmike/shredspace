@@ -1,0 +1,45 @@
+{
+  "verification": {
+    "checks": [
+      {
+        "name": "cmake_configure_linux_release",
+        "command": [
+          "cmake",
+          "--preset",
+          "linux-release"
+        ]
+      },
+      {
+        "name": "cmake_build_linux_release",
+        "command": [
+          "cmake",
+          "--build",
+          "build/linux-release"
+        ]
+      },
+      {
+        "name": "build_script_syntax",
+        "command": [
+          "bash",
+          "-n",
+          "scripts/build_all.sh"
+        ]
+      },
+      {
+        "name": "build_all_artifact_checks",
+        "command": [
+          "bash",
+          "scripts/build_all.sh"
+        ]
+      },
+      {
+        "name": "verification_doc_exists",
+        "command": [
+          "test",
+          "-f",
+          "docs/verification/phase_a_scaffold.md"
+        ]
+      }
+    ]
+  }
+}

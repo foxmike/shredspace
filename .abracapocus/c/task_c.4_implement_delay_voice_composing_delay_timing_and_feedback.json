@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "task_id": "c.4",
+  "phase": "C",
+  "phase_id": "c",
+  "title": "Implement delay voice composing delay timing and feedback",
+  "description": "Create Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp composing FractionalDelay, DelayTimeController targets, and FeedbackController into one stereo delay voice.\n\nBefore editing, inspect:\n- Source/DSP/FractionalDelay.h (read-head API, clamp helper, Smooth/Bend entry points)\n- Source/DSP/FeedbackController.h (getFeedbackGain and kMaxFeedbackGain)\n- Source/DSP/DelayTimeController.h (HostTiming POD, per-voice target, transition requests)\n\nRequired implementation:\n1. The voice owns two FractionalDelay instances (left and right), one FeedbackController, and consumes per-voice time targets supplied by the caller from DelayTimeController. It does not own or query the host.\n2. Write path, verbatim: write = input + feedback, where feedback is the previous loop output scaled by the FeedbackController gain.\n3. prepare(double sampleRate, int maxBlockSize) allocates all maximum-size buffers (8.25 seconds per channel) by forwarding to the FractionalDelay members. Nothing is allocated, resized, or freed in process().\n4. process() is per-sample, uses fractional reads, applies the delay-time transition currently active (Smooth equal-power crossfade or Bend ramp) by delegating to FractionalDelay, and applies the feedback gain from FeedbackController. All read positions remain clamped to [8 samples, 8.25 seconds] through FractionalDelay's clamp; DelayVoice must not compute raw read indices itself.\n5. In this phase the in-loop chain is a documented ordered pass-through stub with the binding order preserved for later phases: fractional delay read, HPF, LPF, Presence Guard, repeat transient softener, mild saturation, restricted diffusion, feedback tap. Add each stage as an explicitly named, commented no-op hook in exactly that order so later phases fill them in. Do not implement filters, saturation, or diffusion in this task.\n6. reset() deterministically clears all member state without reallocating.\n7. No heap allocation, locks, file IO, string construction, GUI calls, or unbounded loops in process().\n\nThe files must be standard C++20 only. Do NOT include any JUCE header; operate on raw float pointers for the stereo buffers.",
+  "acceptance_criteria": [
+    "Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp exist",
+    "g++ -std=c++20 -fsyntax-only -I Source Source/DSP/DelayVoice.cpp passes",
+    "DelayVoice composes FractionalDelay (left and right) and FeedbackController and consumes per-voice time targets rather than querying the host",
+    "The write path implements write = input + feedback",
+    "All delay buffers are allocated in prepare() by forwarding to FractionalDelay and never allocated or resized in process()",
+    "DelayVoice delegates all read-position computation to FractionalDelay so the [8 samples, 8.25 seconds] clamp is never bypassed",
+    "The in-loop chain hooks appear in the order: fractional delay read, HPF, LPF, Presence Guard, repeat transient softener, mild saturation, restricted diffusion, feedback tap",
+    "reset() clears state without reallocating",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/DelayVoice.h",
+    "Source/DSP/DelayVoice.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/FractionalDelay.*, Source/DSP/FeedbackController.*, or Source/DSP/DelayTimeController.*",
+    "modify anything under JUCE/",
+    "include any JUCE header in DelayVoice.h or DelayVoice.cpp",
+    "implement filters, Presence Guard, saturation, or diffusion DSP in this task",
+    "compute raw delay read indices inside DelayVoice instead of delegating to FractionalDelay",
+    "allocate, resize, or free memory in process()",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "DelayVoice",
+    "prepare",
+    "reset",
+    "process",
+    "setDelayTimeSeconds",
+    "setT60Seconds",
+    "setTailScale",
+    "startSmoothTransition",
+    "startBendTransition",
+    "setHoldActive"
+  ],
+  "dependencies": [
+    "c.1",
+    "c.2",
+    "c.3"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

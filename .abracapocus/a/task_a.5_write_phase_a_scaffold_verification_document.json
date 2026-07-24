@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "task_id": "a.5",
+  "phase": "A",
+  "phase_id": "a",
+  "title": "Write phase a scaffold verification document",
+  "description": "Create docs/verification/phase_a_scaffold.md recording the exact commands executed for phase a and their real results. This is a documentation task: write down what actually happened, not what should happen.\n\nBefore editing, inspect:\n- CMakeLists.txt and CMakePresets.json for the frozen identity values and preset names.\n- scripts/build_all.sh for the exact artifact paths it checks.\n- Source/PluginProcessor.cpp for the isBusesLayoutSupported contract and the deterministic output-channel clearing in processBlock.\n\nActually run these three commands from the repository root and capture their real output and exit statuses before writing:\n1. cmake --preset linux-release\n2. cmake --build build/linux-release\n3. bash scripts/build_all.sh\n\nThe document must contain these sections in this order:\n- '# Phase A Scaffold Verification' title.\n- '## Product Identity' listing the frozen values as a table: plugin name ShredSpace, vendor nSpace Systems, version 1.0.0, manufacturer code NSPC, plugin code ShSp, bundle identifier com.nspacesystems.shredspace, LV2 URI urn:nspacesystems:plugin:shredspace.\n- '## Commands Executed' with each of the three commands in a fenced code block followed by its recorded exit status.\n- '## Artifact Results' with one line per artifact (VST3, LV2, Standalone) giving the on-disk path and PASS or FAIL exactly as scripts/build_all.sh reported it.\n- '## Bus Layout Contract' stating that mono-in/mono-out, mono-in/stereo-out, and stereo-in/stereo-out are the only supported layouts, and that processBlock clears every output channel beyond the input channel count before any processing.\n- '## Notes' recording that the windows-msvc preset is configuration only and was not built in this plan, and that JUCE is a submodule pinned to 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2 and was not modified.\n\nDo not invent output. If a command failed, record the failure and its exit status honestly. Do not include artist or song names anywhere in the document.",
+  "acceptance_criteria": [
+    "docs/verification/phase_a_scaffold.md exists and begins with the heading '# Phase A Scaffold Verification'",
+    "docs/verification/phase_a_scaffold.md contains sections titled 'Product Identity', 'Commands Executed', 'Artifact Results', 'Bus Layout Contract', and 'Notes'",
+    "docs/verification/phase_a_scaffold.md lists the frozen identity values ShredSpace, nSpace Systems, 1.0.0, NSPC, ShSp, com.nspacesystems.shredspace, and urn:nspacesystems:plugin:shredspace",
+    "docs/verification/phase_a_scaffold.md records the literal commands 'cmake --preset linux-release', 'cmake --build build/linux-release', and 'bash scripts/build_all.sh' with an exit status for each",
+    "docs/verification/phase_a_scaffold.md records a PASS or FAIL and an on-disk path for each of the VST3, LV2, and Standalone artifacts",
+    "docs/verification/phase_a_scaffold.md states the three supported bus layouts and the deterministic output-channel clearing rule",
+    "docs/verification/phase_a_scaffold.md notes that windows-msvc is configuration only and that JUCE is pinned to 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2 and unmodified",
+    "docs/verification/phase_a_scaffold.md contains no artist or song names",
+    "docs/verification/phase_a_scaffold.md is the only file created or modified by this task"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "docs/verification/phase_a_scaffold.md"
+  ],
+  "forbidden_changes": [
+    "create or modify any file under JUCE/",
+    "modify CMakeLists.txt, CMakePresets.json, scripts/build_all.sh, or .gitignore",
+    "modify any file under Source/",
+    "fabricate command output or exit statuses that were not actually observed",
+    "include artist or song names",
+    "add any new third-party dependency",
+    "create additional documentation files outside docs/verification/phase_a_scaffold.md"
+  ],
+  "allowed_symbols": [
+    "phase_a_scaffold.md"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose markdown table formatting and code-fence language hints",
+      "choose the wording of narrative sentences within the required sections"
+    ],
+    "forbidden": [
+      "omit any of the six required sections",
+      "change any frozen identity value",
+      "record results for commands that were not run",
+      "modify source or build files to make the document's claims true"
+    ]
+  },
+  "dependencies": [
+    "a.4"
+  ],
+  "task_timeout_seconds": 900,
+  "model": "openrouter/google/gemma-4-31b-it",
+  "verification_commands": []
+}

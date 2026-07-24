@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task_id": "b.2",
+  "phase": "B",
+  "phase_id": "b",
+  "title": "Create parameter layout with global macro timing stereo and scene groups",
+  "description": "Create Source/Parameters/ParameterLayout.h and Source/Parameters/ParameterLayout.cpp ONLY. This task builds the FIRST portion of the APVTS layout: the GLOBAL, PERF, TIME, STEREO, and SCENE groups. Voice groups (b.3) and INTEL groups (b.4) are added later by other tasks into the same .cpp file; structure the code so those extensions are simple additive function calls.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterIDs.h (created by b.1; use its constants, never raw string literals)\n- Source/PluginProcessor.h (processor skeleton that will later own the APVTS)\n- JUCE/modules/juce_audio_processors/utilities/juce_AudioProcessorValueTreeState.h (ParameterLayout API)\n\nHEADER (ParameterLayout.h): #pragma once, include <juce_audio_processors/juce_audio_processors.h>, namespace shredspace, declare:\n  juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();\nand declare the internal per-group helper functions used by this and later tasks:\n  void addGlobalParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);\n  void addPerformanceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);\n  void addTimingParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);\n  void addStereoParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);\n  void addSceneParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);\n  void addVoiceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);      // implemented in b.3\n  void addIntelligenceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout); // implemented in b.4\n\nIn ParameterLayout.cpp, createParameterLayout() calls all seven helpers in the order above. For this task, provide DEFINITIONS for addGlobalParameters, addPerformanceParameters, addTimingParameters, addStereoParameters, addSceneParameters, and provide EMPTY placeholder definitions for addVoiceParameters and addIntelligenceParameters with the comment `// Populated by task b.3` / `// Populated by task b.4` so the translation unit links now and is extended later.\n\nEXACT PARAMETER DEFINITIONS (transcribe literally; use juce::AudioParameterFloat with juce::NormalisableRange, juce::AudioParameterBool, juce::AudioParameterChoice, juce::ParameterID{ id, kStateSchemaVersion }):\n\nGLOBAL:\n- GLOBAL_INPUT_GAIN: float, -24.0 to +24.0 dB, default 0.0, step 0.1, suffix \" dB\"\n- GLOBAL_OUTPUT_GAIN: float, -24.0 to +24.0 dB, default 0.0, step 0.1, suffix \" dB\"\n- GLOBAL_MIX: float, 0.0 to 100.0 %, default 22.0, suffix \" %\"\n- GLOBAL_BYPASS: bool, default false (Off)\n- GLOBAL_BYPASS_MODE: choice { \"Hard\", \"Trails\" }, default index 1 (Trails)\n- GLOBAL_MIX_MODE: choice { \"Insert\", \"Send\" }, default index 0 (Insert)\n- GLOBAL_SPILLOVER: bool, default true (On)\n- GLOBAL_SAFETY_LIMITER: bool, default true (On)\n\nPERF:\n- PERF_MACRO_TIME: float, 20.0 to 2000.0 ms, default 380.0, skew factor for musical response (use NormalisableRange with skewForCentre around 400.0), suffix \" ms\"\n- PERF_MACRO_SPACE: float, 0.0 to 100.0 %, default 40.0\n- PERF_MACRO_DEFINITION: float, 0.0 to 100.0 %, default 65.0\n- PERF_MACRO_BLOOM: float, 0.0 to 100.0 %, default 45.0\n- PERF_MACRO_TAIL: float, 0.15 to 12.0 s, default 2.8, skewForCentre around 2.5, suffix \" s\"\n- PERF_MACRO_FOCUS: float, 0.0 to 100.0 %, default 55.0\n- PERF_MACRO_WIDTH: float, 0.0 to 100.0 %, default 65.0\n- PERF_MACRO_CHARACTER: float, 0.0 to 100.0 %, default 30.0\n- PERF_TAP: bool, default false (momentary tap trigger)\n- PERF_HOLD: bool, default false (momentary hold trigger)\n- PERF_HOLD_MODE: choice { \"Momentary\", \"Latch\" }, default index 0 (Momentary)\n- PERF_ADAPTIVE_MODE: choice { \"Off\", \"Level\", \"Articulation\" }, default index 2 (Articulation)\n- PERF_ROUTING: choice { \"Parallel\", \"A to B\", \"B to A\" }, default index 0 (Parallel)\n- PERF_ROUTING_CASCADE: float, 0.0 to 100.0 %, default 50.0\n\nTIME:\n- TIME_MODE: choice { \"Milliseconds\", \"Host Sync\", \"Tap\" }, default index 0 (Milliseconds)\n- TIME_SYNC_DIVISION: choice, exactly these 15 entries in this order: \"1/1\", \"1/1 D\", \"1/1 T\", \"1/2\", \"1/2 D\", \"1/2 T\", \"1/4\", \"1/4 D\", \"1/4 T\", \"1/8\", \"1/8 D\", \"1/8 T\", \"1/16\", \"1/16 D\", \"1/16 T\"; default index 6 (\"1/4\"). Dotted entries mean x1.5 and triplet entries mean x2/3 of the plain division; document this in a comment.\n- TIME_GLIDE: float, 5.0 to 1000.0 ms, default 120.0, skewForCentre around 150.0, suffix \" ms\"\n\nSTEREO:\n- STEREO_LF_MONO: bool, default true (On)\n- STEREO_LF_MONO_FREQ: float, 60.0 to 500.0 Hz, default 180.0, skewForCentre around 180.0, suffix \" Hz\"\n\nSCENE:\n- SCENE_SELECT: choice { \"Scene 1\", \"Scene 2\", \"Scene 3\", \"Scene 4\" }, default index 0\n- SCENE_MORPH: float, 0.0 to 100.0 %, default 0.0\n\nHARD CONSTRAINTS: every parameter ID must come from shredspace::paramids constants in ParameterIDs.h, never a literal string. No internal state (detector means, FFT history, onset timestamps, runtime density/sustain/phrase-gap values, macro destination tables, scene names, profile metadata, telemetry, safety intervention state, buffers, resampler state) may be added as a parameter. No third-party dependency. No artist or song names.",
+  "acceptance_criteria": [
+    "Source/Parameters/ParameterLayout.h declares createParameterLayout plus the seven addXxxParameters helper declarations listed in this task",
+    "Source/Parameters/ParameterLayout.cpp defines createParameterLayout calling all seven helpers, with empty placeholder definitions for addVoiceParameters and addIntelligenceParameters",
+    "g++ -std=c++20 -fsyntax-only -I JUCE/modules -I Source -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_audio_processors=1 -DJUCE_STANDALONE_APPLICATION=0 Source/Parameters/ParameterLayout.cpp passes with no errors",
+    "Every parameter added in Source/Parameters/ParameterLayout.cpp uses a shredspace::paramids constant rather than a raw string literal ID",
+    "The GLOBAL, PERF, TIME, STEREO, and SCENE groups define exactly the 29 parameters with the ranges and defaults listed in this task description",
+    "No file outside Source/Parameters/ParameterLayout.h and Source/Parameters/ParameterLayout.cpp is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Parameters/ParameterLayout.h",
+    "Source/Parameters/ParameterLayout.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Parameters/ParameterIDs.h",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify anything under JUCE/",
+    "add VOICE_A_, VOICE_B_, or INTEL_ parameters (owned by tasks b.3 and b.4)",
+    "use raw string literals for parameter IDs",
+    "add any third-party dependency",
+    "add any internal-state value as an APVTS parameter"
+  ],
+  "allowed_symbols": [
+    "shredspace::createParameterLayout",
+    "shredspace::addGlobalParameters",
+    "shredspace::addPerformanceParameters",
+    "shredspace::addTimingParameters",
+    "shredspace::addStereoParameters",
+    "shredspace::addSceneParameters",
+    "shredspace::addVoiceParameters",
+    "shredspace::addIntelligenceParameters"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose NormalisableRange step and skew details within the stated ranges",
+      "choose parameter display suffixes and string-from-value formatting"
+    ],
+    "forbidden": [
+      "change any stated range, default, or choice ordering",
+      "introduce a data-driven parameter table or code-generation scheme",
+      "change the ParameterIDs.h contract"
+    ]
+  },
+  "dependencies": [
+    "b.1"
+  ],
+  "task_timeout_seconds": 2100,
+  "verification_commands": []
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "task_id": "c.5",
+  "phase": "C",
+  "phase_id": "c",
+  "title": "Create core delay tests with cmake registration",
+  "description": "Create tests/DspCoreTests.cpp and register the four new DSP source files plus the new test file in CMakeLists.txt. CMakeLists.txt is owned only by this task in phase c.\n\nBefore editing, inspect:\n- CMakeLists.txt (existing plugin target, existing console test-runner target and its CTest registration from phase b; reuse the existing runner target rather than creating a second one)\n- tests/ (existing test file style and juce::UnitTest registration pattern from phase b)\n- Source/DSP/FractionalDelay.h, Source/DSP/FeedbackController.h, Source/DSP/DelayTimeController.h, Source/DSP/DelayVoice.h (public APIs to test)\n\nRequired tests, written with the built-in juce::UnitTest framework only (Catch2, GoogleTest, and every other third-party framework are forbidden):\n1. Impulse first-repeat placement: for sample rates 44100, 48000, 88200, 96000, and 192000 Hz, feed an impulse and assert the first repeat appears at round(Fs * T) samples.\n2. Fractional interpolation: for several mu values in [0,1), compare FractionalDelay's output against Lagrange values computed independently inside the test from L_minus1 = -mu*(mu-1)*(mu-2)/6, L_0 = (mu+1)*(mu-1)*(mu-2)/2, L_1 = -(mu+1)*mu*(mu-2)/2, L_2 = (mu+1)*mu*(mu-1)/6, within a stated float tolerance.\n3. Clamp tests: a negative effective time (short sync ratio plus a negative fine offset) clamps the read position to 8 samples, and an over-long request clamps to 8.25 seconds.\n4. T60 decay: measure 20*log10(A(T60)/A(0)) and assert it is approximately -60 dB within a stated tolerance; also assert the returned feedback gain never exceeds 0.985, including with Hold active.\n5. Tap median: five tap intervals containing one outlier outside 100-3000 ms yield the median of the accepted intervals and reject the outlier.\n6. BPM fallback: with bpmValid false and no prior valid BPM, the resolved tempo is 120 BPM; after a valid BPM is seen, that last valid BPM is retained when bpmValid goes false.\n\nCMakeLists.txt edits are limited to: adding Source/DSP/FractionalDelay.cpp, Source/DSP/FeedbackController.cpp, Source/DSP/DelayTimeController.cpp, and Source/DSP/DelayVoice.cpp to the plugin target sources, and adding tests/DspCoreTests.cpp to the existing console test-runner target so it runs under CTest. Do not change presets, targets, JUCE options, or add dependencies.",
+  "acceptance_criteria": [
+    "tests/DspCoreTests.cpp exists and uses only juce::UnitTest, with no Catch2, GoogleTest, or other third-party test framework",
+    "CMakeLists.txt adds the four new DSP .cpp files to the plugin target and tests/DspCoreTests.cpp to the existing console test-runner target",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo configures successfully",
+    "cmake --build build -j configures and builds all targets successfully",
+    "ctest --test-dir build --output-on-failure passes, proving impulse placement at round(Fs*T) for 44100, 48000, 88200, 96000, and 192000 Hz",
+    "ctest --test-dir build --output-on-failure passes the test asserting FractionalDelay output matches independently computed Lagrange values within a stated tolerance",
+    "ctest --test-dir build --output-on-failure passes the clamp tests for 8 samples minimum and 8.25 seconds maximum",
+    "ctest --test-dir build --output-on-failure passes the T60 test asserting 20*log10(A(T60)/A(0)) is approximately -60 dB and that feedback gain never exceeds 0.985 including with Hold active",
+    "ctest --test-dir build --output-on-failure passes the tap-median outlier-rejection test and the 120 BPM fallback and last-valid-BPM retention tests",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/DspCoreTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify Source/DSP/FractionalDelay.*, Source/DSP/FeedbackController.*, Source/DSP/DelayTimeController.*, or Source/DSP/DelayVoice.*",
+    "modify CMakePresets.json",
+    "modify anything under JUCE/",
+    "add Catch2, GoogleTest, or any other third-party test framework",
+    "add any new third-party dependency",
+    "create a second test-runner target instead of reusing the existing one",
+    "change JUCE module options, plugin metadata, or preset definitions in CMakeLists.txt",
+    "weaken a failing assertion instead of reporting the failure"
+  ],
+  "allowed_symbols": [
+    "DspCoreTests",
+    "FractionalDelayTests",
+    "DelayTimeControllerTests",
+    "FeedbackControllerTests",
+    "DelayVoiceTests",
+    "runTest",
+    "beginTest",
+    "expect",
+    "expectWithinAbsoluteError"
+  ],
+  "dependencies": [
+    "c.4"
+  ],
+  "task_timeout_seconds": 1800,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

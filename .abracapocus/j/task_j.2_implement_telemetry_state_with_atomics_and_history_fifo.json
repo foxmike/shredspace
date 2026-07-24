@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "task_id": "j.2",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Implement telemetry state with atomics and history fifo",
+  "description": "Create Source/Telemetry/TelemetryState.h and Source/Telemetry/TelemetryState.cpp, then publish into it from Source/PluginProcessor.h and Source/PluginProcessor.cpp.\n\nTelemetryState is the ONLY channel between the audio thread and the GUI. It must contain:\n1. Scalar latest-value telemetry as `std::atomic<float>` (and `std::atomic<bool>` for the safety flag): leftPeak, rightPeak, leftRms, rightRms, activity, density, sustain, contraction, bloom, correlation, safetyEngaged. Provide `setX(float)` writers using `std::memory_order_relaxed` (release only where a grouped snapshot is required) and `getX()` readers for the GUI.\n2. A `juce::AbstractFifo` plus a fixed-size preallocated backing array of a POD struct `HistorySample { float onset; float density; float sustain; float gap; }` used ONLY for detector time-series history where overflow is acceptable. The FIFO is never authoritative for current meter values. Size the backing array as a compile-time constant (e.g. `static constexpr int historyCapacity = 1024;`) allocated as a `std::array`, never resized at runtime.\n3. `pushHistory(const HistorySample&)` callable from the audio thread with no allocation, no locks, and no blocking: if there is no free space, drop the sample and return.\n4. `int readHistory(HistorySample* dest, int maxSamples)` for the GUI timer.\n\nReal-time rules are binding: nothing in TelemetryState called from processBlock may allocate, lock, construct a juce::String, or grow a buffer. All storage is allocated at construction or in a `prepare()` called from prepareToPlay.\n\nIn PluginProcessor: add a `TelemetryState telemetry;` member (or equivalent) with a public accessor `TelemetryState& getTelemetryState() noexcept`, call any `prepare()` from prepareToPlay, and publish the scalar values at the end of processBlock from values already computed by the DSP/analyzer. Do not add new DSP computation, do not change the processing chain, and keep `juce::ScopedNoDenormals` at the top of processBlock. Publication must be pure atomic stores.\n\nBefore editing, inspect:\n- Source/PluginProcessor.h and Source/PluginProcessor.cpp (existing members, prepareToPlay, processBlock structure, and the names of the analyzer/detector values already available)\n- JUCE/modules/juce_core/containers/juce_AbstractFifo.h (exact prepareToWrite/finishedWrite/prepareToRead/finishedRead signatures in the vendored revision)\n- Source/DSP or Source/Analysis headers for the existing analyzer output accessors, so publication reads existing values rather than recomputing them\n\nNeither Source/Telemetry nor the GUI may include DSP headers, and DSP code may not include Telemetry headers other than PluginProcessor's own publication site.",
+  "acceptance_criteria": [
+    "Source/Telemetry/TelemetryState.h declares class TelemetryState with std::atomic members for leftPeak, rightPeak, leftRms, rightRms, activity, density, sustain, contraction, bloom, correlation, and safetyEngaged",
+    "Source/Telemetry/TelemetryState.h declares a POD struct HistorySample and a juce::AbstractFifo with a fixed-size std::array backing store sized by a static constexpr capacity",
+    "pushHistory in Source/Telemetry/TelemetryState.cpp performs no heap allocation, takes no lock, and drops samples when the fifo is full",
+    "Source/PluginProcessor.h declares a TelemetryState member and a getTelemetryState() accessor returning a reference",
+    "Source/PluginProcessor.cpp publishes telemetry scalar values at the end of processBlock using atomic stores only, with no allocation, locks, juce::String construction, or GUI calls added inside processBlock",
+    "juce::ScopedNoDenormals remains the first statement of processBlock in Source/PluginProcessor.cpp",
+    "Source/Telemetry/TelemetryState.h and .cpp include no header from Source/GUI or Source/DSP",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Telemetry/TelemetryState.h",
+    "Source/Telemetry/TelemetryState.cpp",
+    "Source/PluginProcessor.h",
+    "Source/PluginProcessor.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify any file under Source/GUI",
+    "add heap allocation, locks, file IO, string construction, or GUI calls inside processBlock",
+    "use std::atomic<std::shared_ptr> or place strings/metadata in audio-thread snapshots",
+    "resize the history fifo backing store at runtime",
+    "change the existing DSP processing chain, parameter layout, or bus layout logic",
+    "add new third-party dependencies"
+  ],
+  "allowed_symbols": [
+    "TelemetryState",
+    "HistorySample",
+    "pushHistory",
+    "readHistory",
+    "prepare",
+    "getTelemetryState"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the history fifo capacity constant",
+      "choose relaxed versus release/acquire ordering per scalar",
+      "add private setters for individual telemetry scalars"
+    ],
+    "forbidden": [
+      "introduce a new cross-thread messaging framework",
+      "make the history fifo authoritative for meter values",
+      "add new DSP analysis computation in PluginProcessor"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

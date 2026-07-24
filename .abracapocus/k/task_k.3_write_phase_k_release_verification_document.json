@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "task_id": "k.3",
+  "phase": "K",
+  "phase_id": "k",
+  "title": "Write phase k release verification document",
+  "description": "Execute scripts/validate_plugin.sh and write docs/verification/phase_k_release.md recording the REAL results.\n\nBefore editing, inspect:\n- scripts/validate_plugin.sh (created in k.1; the exact stages and commands it echoes)\n- tests/StateRoundTripTests.cpp and CMakeLists.txt (created/updated in k.2; the test names ctest reports)\n- docs/verification/ (existing phase verification documents, to match their heading structure and command-matrix table format)\n\nProcedure, in order:\n1. Run 'bash scripts/validate_plugin.sh' from the repository root and capture its full output, including the echoed commands, the ctest summary, the per-artefact PASS/FAIL lines, and the final summary block and exit status.\n2. Write docs/verification/phase_k_release.md containing:\n   a. A command matrix table with one row per executed command (cmake configure with the linux-release preset, cmake build, full ctest run, each artefact existence check), each row giving the exact command string as executed and its actual observed result (PASS/FAIL plus exit status). Transcribe only what actually ran and what actually happened. Do NOT invent, predict, or write aspirational results. If a stage failed, record the failure verbatim.\n   b. The ctest totals as reported (tests run, passed, failed) and the named result of the state round-trip test.\n   c. A section 'Remaining operator work before release' listing, explicitly:\n      - Real-guitar evaluation after high-gain amp or NAM processing, covering alternate picking, economy picking, sweep arpeggios, legato, tapping, bends, wide vibrato, held notes, phrase endings, chords, palm-muted rhythms, sustained feedback, string noise, and gated silence; judged for dry attack clarity, repeated-note clutter, upper-mid buildup, pumping, width, mono compatibility, bloom timing, sustained-note size, and profile usefulness; at 44.1 kHz, 48 kHz, and 96 kHz, in REAPER, Studio One, Bitwig, and Standalone, across VST3 and LV2.\n      - Profile tuning updates to the bundled resources based on that evaluation, with the explicit statement that profiles are NOT release-ready merely because the JSON parses.\n      - The later Windows MSVC build performed on Windows tooling via the Aural Maximizer Pro workflow, noting that the windows-msvc CMake preset is configuration only and was not built in this phase.\n   d. A short status line stating whether the Linux release gate passed, derived from the script's actual exit status.\n3. Record the product identity as verified: ShredSpace 1.0.0, vendor nSpace Systems, manufacturer code NSPC, plugin code ShSp, bundle identifier com.nspacesystems.shredspace, LV2 URI urn:nspacesystems:plugin:shredspace.\n\nWrite documentation only. Do not modify the script, the tests, CMake files, or any source file. No artist or song names may appear anywhere in the document.",
+  "acceptance_criteria": [
+    "docs/verification/phase_k_release.md exists",
+    "docs/verification/phase_k_release.md contains a command matrix table listing the cmake configure, cmake build, ctest, and per-artefact existence checks with the exact commands as executed and their actual observed results",
+    "docs/verification/phase_k_release.md reports the actual ctest totals and the named result of the state round-trip test from tests/StateRoundTripTests.cpp",
+    "docs/verification/phase_k_release.md contains a 'Remaining operator work before release' section covering real-guitar evaluation (playing techniques, judging criteria, 44.1/48/96 kHz, REAPER, Studio One, Bitwig, Standalone, VST3 and LV2), profile tuning of bundled resources with the explicit statement that parsing JSON does not make profiles release-ready, and the later Windows MSVC build via the Aural Maximizer Pro workflow",
+    "docs/verification/phase_k_release.md records the product identity ShredSpace 1.0.0, nSpace Systems, NSPC, ShSp, com.nspacesystems.shredspace, urn:nspacesystems:plugin:shredspace",
+    "docs/verification/phase_k_release.md contains no artist or song names",
+    "bash scripts/validate_plugin.sh was executed and its real output is the source of every recorded result",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "docs/verification/phase_k_release.md"
+  ],
+  "forbidden_changes": [
+    "modify scripts/validate_plugin.sh",
+    "modify tests/StateRoundTripTests.cpp or any other file under tests/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify any file under Source/ or JUCE/",
+    "record aspirational, predicted, or fabricated command results instead of actually executed ones",
+    "omit a failing stage or soften a recorded failure",
+    "include artist or song names",
+    "build or claim to have built the windows-msvc preset"
+  ],
+  "allowed_symbols": [],
+  "decision_budget": {
+    "allowed": [
+      "choose markdown heading and table formatting consistent with existing docs/verification documents",
+      "choose the ordering of rows within the command matrix"
+    ],
+    "forbidden": [
+      "change the validation procedure or the commands executed",
+      "declare the release gate passed when the script exited non-zero",
+      "add release criteria not stated in the phase goal"
+    ]
+  },
+  "dependencies": [
+    "k.2"
+  ],
+  "task_timeout_seconds": 3600,
+  "model": "openrouter/google/gemma-4-31b-it",
+  "verification_commands": []
+}

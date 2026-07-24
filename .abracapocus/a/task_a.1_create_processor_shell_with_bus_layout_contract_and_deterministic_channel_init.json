@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "task_id": "a.1",
+  "phase": "A",
+  "phase_id": "a",
+  "title": "Create processor shell with bus layout contract and deterministic channel init",
+  "description": "Create the minimal ShredSpace AudioProcessor shell in Source/PluginProcessor.h and Source/PluginProcessor.cpp. This is a scaffold task: no DSP, no parameters, no APVTS beyond what is stated here.\n\nBefore editing, inspect:\n- ./JUCE/modules/juce_audio_processors/processors/juce_AudioProcessor.h for the exact virtual signatures of prepareToPlay, releaseResources, processBlock, isBusesLayoutSupported, createEditor, hasEditor, getName, acceptsMidi, producesMidi, isMidiEffect, getTailLengthSeconds, getNumPrograms, getCurrentProgram, setCurrentProgram, getProgramName, changeProgramName, getStateInformation, setStateInformation.\n- ./JUCE/modules/juce_audio_processors/utilities/juce_AudioProcessorValueTreeState.h only if needed for include hygiene; do NOT add an APVTS in this task.\n- ./JUCE (git submodule pinned at 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2). Do not read/modify anything for editing purposes under JUCE/.\n\nImplement exactly:\n1. class ShredSpaceAudioProcessor : public juce::AudioProcessor, declared in Source/PluginProcessor.h with JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ShredSpaceAudioProcessor).\n2. Constructor uses BusesProperties().withInput(\"Input\", juce::AudioChannelSet::stereo(), true).withOutput(\"Output\", juce::AudioChannelSet::stereo(), true).\n3. bool isBusesLayoutSupported (const BusesLayout& layouts) const override returns true for EXACTLY these three combinations and false for every other combination: mono in / mono out, mono in / stereo out, stereo in / stereo out. Compare using juce::AudioChannelSet::mono() and juce::AudioChannelSet::stereo() on layouts.getMainInputChannelSet() and layouts.getMainOutputChannelSet(). Reject any layout whose input or output set is neither mono nor stereo, and reject stereo in / mono out.\n4. void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override begins with `juce::ScopedNoDenormals noDenormals;` as its first statement. Immediately after that, and before any other processing, clear every output channel with index >= getTotalNumInputChannels() up to getTotalNumOutputChannels() using buffer.clear (channel, 0, buffer.getNumSamples()), so no uninitialized channel can reach the host. No further processing in this task (audio passes through untouched for channels that exist in both input and output).\n5. prepareToPlay (double sampleRate, int samplesPerBlock) and releaseResources() are present as stubs that store nothing but are ready for later allocation; mark unused parameters with juce::ignoreUnused. All allocation belongs in prepareToPlay in later phases; this task allocates nothing.\n6. createEditor() returns a new ShredSpaceAudioProcessorEditor via a forward declaration; hasEditor() returns true. Since Source/PluginEditor.h does not exist yet, forward-declare `class ShredSpaceAudioProcessorEditor;` in the header and implement createEditor() in the .cpp guarded by `#include \"PluginEditor.h\"` ONLY IF that file exists; otherwise return nullptr from createEditor() with a `// TODO(a.2): return new ShredSpaceAudioProcessorEditor (*this);` comment. Task a.2 will replace that line.\n7. getName() returns \"ShredSpace\". acceptsMidi/producesMidi/isMidiEffect return false. getTailLengthSeconds() returns 0.0. getNumPrograms() returns 1, getCurrentProgram() returns 0, setCurrentProgram ignores its argument, getProgramName returns {}, changeProgramName ignores its arguments.\n8. getStateInformation/setStateInformation are empty stubs using juce::ignoreUnused.\n9. Provide `juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()` at the bottom of Source/PluginProcessor.cpp returning `new ShredSpaceAudioProcessor()`.\n\nBinding real-time rules that apply to processBlock now and forever: no heap allocation, no locks, no file IO, no string construction, no GUI calls, no unbounded loops, no buffer resizing, no destruction of heap-owned objects.\n\nDo not create CMakeLists.txt, CMakePresets.json, the editor files, scripts, or docs in this task.",
+  "acceptance_criteria": [
+    "Source/PluginProcessor.h declares class ShredSpaceAudioProcessor deriving from juce::AudioProcessor and overriding isBusesLayoutSupported",
+    "Source/PluginProcessor.cpp implements isBusesLayoutSupported returning true only for mono-in/mono-out, mono-in/stereo-out, and stereo-in/stereo-out, and false for stereo-in/mono-out",
+    "Source/PluginProcessor.cpp processBlock has juce::ScopedNoDenormals as its first statement",
+    "Source/PluginProcessor.cpp processBlock clears every output channel with index >= getTotalNumInputChannels() before any other processing",
+    "Source/PluginProcessor.cpp contains no calls to new, malloc, std::vector::resize, juce::AudioBuffer::setSize, or std::string construction inside processBlock",
+    "Source/PluginProcessor.cpp defines createPluginFilter() returning a new ShredSpaceAudioProcessor",
+    "Source/PluginProcessor.h and Source/PluginProcessor.cpp are the only files created or modified by this task",
+    "No file under JUCE/ is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/PluginProcessor.h",
+    "Source/PluginProcessor.cpp"
+  ],
+  "forbidden_changes": [
+    "create or modify any file under JUCE/",
+    "create or modify CMakeLists.txt or CMakePresets.json",
+    "create or modify Source/PluginEditor.h or Source/PluginEditor.cpp",
+    "create or modify scripts/build_all.sh, .gitignore, or anything under docs/",
+    "add an AudioProcessorValueTreeState, parameters, or any DSP processing",
+    "allocate memory, lock, perform file IO, or construct strings inside processBlock",
+    "add any new third-party dependency",
+    "accept bus layouts other than mono-in/mono-out, mono-in/stereo-out, and stereo-in/stereo-out",
+    "change the product identity strings ShredSpace, nSpace Systems, NSPC, or ShSp"
+  ],
+  "allowed_symbols": [
+    "ShredSpaceAudioProcessor",
+    "isBusesLayoutSupported",
+    "processBlock",
+    "prepareToPlay",
+    "releaseResources",
+    "createEditor",
+    "hasEditor",
+    "getName",
+    "acceptsMidi",
+    "producesMidi",
+    "isMidiEffect",
+    "getTailLengthSeconds",
+    "getNumPrograms",
+    "getCurrentProgram",
+    "setCurrentProgram",
+    "getProgramName",
+    "changeProgramName",
+    "getStateInformation",
+    "setStateInformation",
+    "createPluginFilter"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose header include order and include guards or #pragma once",
+      "choose local variable names inside processBlock",
+      "choose whether createEditor returns nullptr placeholder or includes PluginEditor.h if it already exists"
+    ],
+    "forbidden": [
+      "introduce a parameter layout or APVTS",
+      "introduce DSP classes, delay lines, or filters",
+      "change the plugin class naming convention away from ShredSpaceAudioProcessor",
+      "add build system files"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1200,
+  "verification_commands": []
+}

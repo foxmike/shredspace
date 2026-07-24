@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "task_id": "g.3",
+  "phase": "G",
+  "phase_id": "g",
+  "title": "Implement spectral flux onset detector with fused scoring",
+  "description": "Create Source/Analysis/OnsetDetector.h and Source/Analysis/OnsetDetector.cpp ONLY.\n\nBefore editing, inspect:\n- Source/Analysis/PerformanceAnalyzer.h (task g.2 \u2014 consume its fixed-rate analysis buffer, fast/slow envelopes, slow-envelope dB, and time novelty; do not recompute them)\n- Source/Analysis/AnalysisResampler.h (task g.1 \u2014 for the fixed analysis rate constant)\n- CMakeLists.txt (read only, to confirm juce_dsp availability for juce::dsp::FFT; do NOT edit it)\n\nImplement class OnsetDetector with prepare (int maxAnalysisBlockSamples), reset(), and process (const float* analysisSamples, int numAnalysisSamples, float timeNovelty, float slowEnvelopeDb).\n\nSTFT, fixed and binding: causal STFT at the fixed 48000 Hz analysis rate with FFT size N = 512, hop = 256, and a Hann window w[n] = 0.5 * (1 - cos(2*pi*n / (N - 1))). At this fixed rate the window is 10.6667 ms, the hop is 5.3333 ms, and bin spacing is 93.75 Hz. FFT size and hop MUST NOT scale with host sample rate under any circumstance. Use juce::dsp::FFT with order 9, constructed and all FFT/window/magnitude/previous-magnitude storage preallocated in prepare(). Maintain a circular input accumulation buffer so frames are emitted every 256 analysis samples across block boundaries.\n\nSpectral flux: over the bins spanning approximately 150 Hz to 8 kHz (bin index k from ceil(150.0/93.75) to floor(8000.0/93.75), inclusive; precompute these indices and the per-bin weight_k in prepare()), compute\n  flux = (1/K) * sum_k ( weight_k * max(0, log(|X_m[k]| + eps) - log(|X_{m-1}[k]| + eps)) )\nwith eps = 1.0e-9 and K the number of contributing bins. Store |X_{m-1}[k]| in a preallocated array and update it after each frame.\n\nPer-feature adaptive normalization: for each of the three features maintain a running mean and a running mean absolute deviation, updated with a one-pole coefficient computed in prepare(), and produce\n  z_i = max(0, (v_i - mean_i) / (deviation_i + eps)).\nThe three features are: z_time from the time novelty supplied by PerformanceAnalyzer, z_flux from the spectral flux computed here, and z_energy from the positive deviation of the slow-envelope level in dB.\n\nFused score: onsetScore = sigmoid(w_time*z_time + w_flux*z_flux + w_energy*z_energy - threshold), with sigmoid(x) = 1/(1+exp(-x)) and initial weights w_time = 0.35, w_flux = 0.50, w_energy = 0.15. The flux weight is the largest deliberately: high-gain distortion flattens amplitude transients, so the detector must never rely on envelope novelty alone. Expose the weights and threshold as settable members with those defaults.\n\nAcceptance of an onset requires ALL of: (a) onsetScore crosses the acceptance threshold, (b) local-maximum selection \u2014 the score at frame m exceeds both its immediate neighbours in the score history, (c) noise-gate qualification \u2014 the slow-envelope level in dB is above a configurable gate (default -55 dB), and (d) a refractory interval of 25 ms has elapsed since the last accepted onset (25 ms at the fixed analysis rate = 1200 analysis samples; track it as a sample counter, never as a wall-clock time).\n\nPublic accessors: getOnsetScore(), getSpectralFlux(), getSmoothedOnsetActivity() (a continuous one-pole smoothing of accepted-onset impulses), consumeAcceptedOnsets() or an equivalent non-allocating way for downstream modules to read the accepted-onset timestamps and count produced by the most recent process() call, and getSamplesSinceLastOnset().\n\nReal-time rules restated and binding: no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, buffer resizing, or FFT allocation inside process(); the FFT object and every buffer are created in prepare(). Use juce::ScopedNoDenormals where spectral and normalization state is updated. All outputs are continuous confidences plus discrete accepted-onset events; no technique classification. Do not introduce any new third-party dependency.",
+  "acceptance_criteria": [
+    "Source/Analysis/OnsetDetector.h and Source/Analysis/OnsetDetector.cpp exist and define class OnsetDetector with prepare, reset, and process members",
+    "OnsetDetector.cpp uses a compile-time FFT size of 512 and hop of 256 that do not depend on host sample rate, and constructs the juce::dsp::FFT object in prepare rather than in process",
+    "The Hann window is computed as 0.5*(1 - cos(2*pi*n/(N-1))) and stored in a buffer filled during prepare",
+    "Spectral flux is computed as a weighted mean over bins of max(0, log(|X_m[k]|+eps) - log(|X_m-1[k]|+eps)) with the bin range derived from 150 Hz to 8 kHz at 93.75 Hz bin spacing",
+    "Per-feature normalization computes z_i = max(0, (v_i - mean_i)/(deviation_i + eps)) for the time, flux, and energy features using running mean and running absolute deviation",
+    "onsetScore uses sigmoid(w_time*z_time + w_flux*z_flux + w_energy*z_energy - threshold) with default weights 0.35, 0.50, and 0.15 and sigmoid defined as 1/(1+exp(-x))",
+    "Onset acceptance requires threshold crossing, local-maximum selection, noise-gate qualification, and a 25 ms refractory interval tracked as an analysis-sample counter",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_dsp=1 Source/Analysis/OnsetDetector.cpp succeeds",
+    "OnsetDetector::process contains no call to new, malloc, resize, setSize, or any locking primitive",
+    "No file outside Source/Analysis/OnsetDetector.h and Source/Analysis/OnsetDetector.cpp is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Analysis/OnsetDetector.h",
+    "Source/Analysis/OnsetDetector.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Analysis/PerformanceAnalyzer.h, Source/Analysis/PerformanceAnalyzer.cpp, Source/Analysis/AnalysisResampler.h, or Source/Analysis/AnalysisResampler.cpp",
+    "modify CMakeLists.txt",
+    "modify anything under JUCE/",
+    "add any new third-party dependency",
+    "scale FFT size or hop size with the host sample rate",
+    "allocate FFT or spectral storage inside process()",
+    "use envelope novelty alone as the onset criterion",
+    "emit a hard technique classification"
+  ],
+  "allowed_symbols": [
+    "OnsetDetector",
+    "prepare",
+    "reset",
+    "process",
+    "getOnsetScore",
+    "getSpectralFlux",
+    "getSmoothedOnsetActivity",
+    "getSamplesSinceLastOnset",
+    "consumeAcceptedOnsets",
+    "setWeights",
+    "setThreshold",
+    "setNoiseGateDb"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose private member names, circular buffer layout, and score history depth",
+      "choose the normalization one-pole time constant and document it in a comment",
+      "add private helper methods inside OnsetDetector"
+    ],
+    "forbidden": [
+      "change the specified STFT size, hop, window, flux, normalization, or fusion equations",
+      "introduce a new FFT or DSP third-party dependency",
+      "change the 25 ms refractory interval or the initial fusion weights",
+      "modify shared plugin or build files"
+    ]
+  },
+  "dependencies": [
+    "g.2"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

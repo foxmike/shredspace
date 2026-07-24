@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "i.2",
+  "phase": "I",
+  "phase_id": "i",
+  "title": "Implement off thread profile manager for bundled and user profiles",
+  "description": "Create ONLY Source/Profiles/ProfileManager.h and Source/Profiles/ProfileManager.cpp.\n\nBefore editing, inspect:\n- Source/Profiles/ProfileSchema.h (created by task i.1) for ProfileDocument, ProfileValidationResult, ProfileSchema::parse, and kCurrentSchemaVersion. Do NOT modify it.\n- Source/Parameters/ParameterLayout.h for the frozen parameter ID list used as the validation input.\n- Source/PluginProcessor.h (read only) to see how the APVTS is exposed; do NOT modify it.\n- JUCE/modules/juce_core for juce::File, juce::MemoryInputStream, juce::JSON. Never modify anything under JUCE/.\n\nImplement ProfileManager with strictly message-thread/background-thread behavior:\n1. loadBundledProfiles(): iterates the generated BinaryData profile entries by name prefix \"Resources/Profiles\" (accept the BinaryData symbol table via a small injectable accessor so this file compiles before task i.6 generates the resources; the accessor defaults to the BinaryData namespace guarded by __has_include). Each entry is parsed through ProfileSchema::parse and validated against the frozen ID list; invalid profiles are skipped and recorded in a load-report string list, never inserted into the catalog.\n2. loadUserProfiles(const juce::File& userDir): scans *.json in the given directory, same parse/validate/skip behavior. Missing or unreadable directory is not an error; it yields an empty result.\n3. getProfiles() returns the validated catalog; getProfile(name) returns a pointer or nullptr.\n4. recallProfile(name, juce::AudioProcessorValueTreeState&): this is the ONLY code path in the plugin permitted to replace base APVTS values. It must assert it is running on the message thread (JUCE_ASSERT_MESSAGE_THREAD) and apply base_parameter_values via each parameter's setValueNotifyingHost with normalised conversion through the parameter's NormalisableRange. It never writes macro deltas, scene deltas, or adaptive deltas.\n5. All parsing, file IO, string handling, and catalog mutation happen off the audio thread. ProfileManager exposes NO method callable from processBlock. Do not include any audio-thread entry point, and do not reference juce::AudioBuffer here.\n6. A malformed or failing profile must never reach any downstream consumer: the catalog only ever contains documents whose ProfileValidationResult.ok is true.\n\nNo artist or song name may appear in any comment, string, or identifier.",
+  "acceptance_criteria": [
+    "Source/Profiles/ProfileManager.h and Source/Profiles/ProfileManager.cpp exist and declare ProfileManager with loadBundledProfiles, loadUserProfiles, getProfiles, getProfile, and recallProfile",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_core=1 Source/Profiles/ProfileManager.cpp passes",
+    "recallProfile is the only method that writes APVTS values and it calls JUCE_ASSERT_MESSAGE_THREAD before writing",
+    "Profiles whose ProfileValidationResult.ok is false are excluded from the catalog and recorded in the load report",
+    "Neither file references juce::AudioBuffer or exposes any method documented as audio-thread callable",
+    "No artist or song name appears in either file",
+    "No file outside this task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Profiles/ProfileManager.h",
+    "Source/Profiles/ProfileManager.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Profiles/ProfileSchema.h or Source/Profiles/ProfileSchema.cpp",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify Source/Parameters/ParameterLayout.h or Source/Parameters/ParameterLayout.cpp",
+    "add any new third-party dependency",
+    "perform file IO, JSON parsing, or string construction from any audio-thread entry point",
+    "write APVTS values from anywhere other than recallProfile",
+    "include artist or song names in comments, strings, or identifiers"
+  ],
+  "allowed_symbols": [
+    "ProfileManager",
+    "ProfileManager::loadBundledProfiles",
+    "ProfileManager::loadUserProfiles",
+    "ProfileManager::getProfiles",
+    "ProfileManager::getProfile",
+    "ProfileManager::recallProfile",
+    "ProfileLoadReport",
+    "BundledProfileAccessor"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the catalog container type",
+      "choose the injectable BinaryData accessor shape",
+      "add local static helpers inside ProfileManager.cpp"
+    ],
+    "forbidden": [
+      "change the profile schema or validation rules",
+      "define or publish the real-time snapshot",
+      "introduce a background thread pool or new threading primitive beyond juce::Thread usage already present in the project",
+      "apply macro or scene deltas to the APVTS"
+    ]
+  },
+  "dependencies": [
+    "i.1"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

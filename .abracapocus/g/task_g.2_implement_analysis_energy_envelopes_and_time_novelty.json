@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "task_id": "g.2",
+  "phase": "G",
+  "phase_id": "g",
+  "title": "Implement analysis energy envelopes and time novelty",
+  "description": "Create Source/Analysis/PerformanceAnalyzer.h and Source/Analysis/PerformanceAnalyzer.cpp ONLY. This module owns the fixed-rate analysis front end (it drives AnalysisResampler from g.1) and computes the time-domain energy, envelopes, and novelty feature consumed by the onset detector.\n\nBefore editing, inspect:\n- Source/Analysis/AnalysisResampler.h (created by task g.1 \u2014 reuse it, do not reimplement resampling here)\n- Source/PluginProcessor.h (for prepareToPlay/processBlock conventions and existing naming style)\n- CMakeLists.txt (read only, to confirm C++20 and JUCE modules; do NOT edit it)\n\nImplement class PerformanceAnalyzer with:\n- prepare (double hostSampleRate, int maxBlockSize): allocate every buffer here, construct and prepare the owned AnalysisResampler, precompute envelope coefficients, and reset state.\n- reset(): zeroes envelopes and history, allocating nothing.\n- process (const float* left, const float* right, int numChannels, int numSamples): computes the analysis-band mono energy signal, resamples it to the fixed 48000 Hz analysis rate through the owned AnalysisResampler, and updates envelopes and novelty at that fixed rate.\n\nRequired equations, exactly as specified and restated here because they are binding:\n- Analysis energy, stereo: energy[n] = sqrt((L[n]^2 + R[n]^2) / 2 + epsilon), with epsilon = 1.0e-20.\n- Analysis energy, mono: energy[n] = std::abs(x[n]).\n- Fast envelope time constant tau_fast = 0.002 s (2 ms); slow envelope time constant tau_slow = 0.060 s (60 ms).\n- Envelope coefficient: alpha = exp(-1.0 / (tau * 48000.0)). The 48000.0 is the fixed analysis rate, NOT the host rate; the coefficients must not vary with host sample rate. Compute both alphas once in prepare().\n- One-pole update per analysis sample: env = alpha * env + (1 - alpha) * energy, applied to both fast and slow envelopes.\n- Time-domain novelty: novelty = max(0.0f, 20.0f * log10((fast + eps) / (slow + eps))) with eps = 1.0e-12f.\n\nPublic accessors (all const, cheap, no allocation): getFastEnvelope(), getSlowEnvelope(), getTimeNovelty(), getSlowEnvelopeDb() returning 20*log10(slow + eps), getAnalysisBuffer() and getNumAnalysisSamples() exposing the fixed-rate analysis samples produced by the most recent process() call so that downstream detectors (OnsetDetector, DensityEstimator, SustainEstimator) can consume the same fixed-rate stream without resampling again.\n\nReal-time rules restated and binding for this file: no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, buffer resizing, or destruction of heap-owned objects inside process(). All maximum-size buffers are allocated in prepare(). Use juce::ScopedNoDenormals (or explicit denormal flushing) where envelope state is updated. Scalar telemetry that leaves this object for the message thread, if any, must be published through std::atomic scalars only \u2014 never strings, never shared_ptr.\n\nAll analyzer outputs are continuous values; this module must not classify technique or emit boolean decisions other than internal numerical guards. Do not introduce any new third-party dependency.",
+  "acceptance_criteria": [
+    "Source/Analysis/PerformanceAnalyzer.h and Source/Analysis/PerformanceAnalyzer.cpp exist and define class PerformanceAnalyzer with prepare, reset, and process members",
+    "PerformanceAnalyzer owns an AnalysisResampler instance from Source/Analysis/AnalysisResampler.h and does not implement its own rate conversion",
+    "PerformanceAnalyzer.cpp computes stereo energy as sqrt((L*L + R*R)/2 + epsilon) and mono energy as std::abs(x)",
+    "Envelope coefficients are computed as exp(-1.0 / (tau * 48000.0)) with tau values 0.002 and 0.060 and are computed in prepare, not in process",
+    "Time novelty is computed as max(0, 20*log10((fast+eps)/(slow+eps))) and is exposed through a const accessor",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_dsp=1 Source/Analysis/PerformanceAnalyzer.cpp succeeds",
+    "PerformanceAnalyzer::process contains no call to new, malloc, resize, setSize, or any locking primitive",
+    "No file outside Source/Analysis/PerformanceAnalyzer.h and Source/Analysis/PerformanceAnalyzer.cpp is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Analysis/PerformanceAnalyzer.h",
+    "Source/Analysis/PerformanceAnalyzer.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Analysis/AnalysisResampler.h or Source/Analysis/AnalysisResampler.cpp",
+    "modify CMakeLists.txt",
+    "modify anything under JUCE/",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "add any new third-party dependency",
+    "derive envelope coefficients from the host sample rate instead of the fixed 48000 Hz analysis rate",
+    "allocate memory, lock, or construct strings inside process()",
+    "emit boolean technique classifications instead of continuous values"
+  ],
+  "allowed_symbols": [
+    "PerformanceAnalyzer",
+    "prepare",
+    "reset",
+    "process",
+    "getFastEnvelope",
+    "getSlowEnvelope",
+    "getSlowEnvelopeDb",
+    "getTimeNovelty",
+    "getAnalysisBuffer",
+    "getNumAnalysisSamples"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose private member names and buffer layout",
+      "add private helper methods inside PerformanceAnalyzer",
+      "choose the exact epsilon constant names"
+    ],
+    "forbidden": [
+      "change the specified energy, envelope, or novelty equations",
+      "reimplement rate conversion instead of using AnalysisResampler",
+      "introduce a new third-party dependency",
+      "publish non-POD data across threads"
+    ]
+  },
+  "dependencies": [
+    "g.1"
+  ],
+  "task_timeout_seconds": 1800,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

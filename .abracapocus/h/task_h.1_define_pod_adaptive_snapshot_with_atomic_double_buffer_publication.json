@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task_id": "h.1",
+  "phase": "H",
+  "phase_id": "h",
+  "title": "Define pod adaptive snapshot with atomic double buffer publication",
+  "description": "Create Source/Analysis/AdaptiveSnapshot.h only. This is a header-only, fixed-size POD snapshot plus a double-buffered publisher used to cross from the message/control path to the audio thread.\n\nBefore editing, inspect:\n- Source/Analysis/ (existing analyzer, onset, density, sustain, and controller headers) to reuse existing naming, namespace, and include conventions.\n- Source/DSP/DelayVoice.h for the per-voice destination names and value ranges the snapshot must carry.\n- Source/PluginProcessor.h for the namespace and header include style used across the project.\n\nDefine, inside the project's existing analysis namespace:\n1. `struct AdaptiveSnapshot` - a trivially copyable POD aggregate with NO strings, NO std::string, NO pointers to heap data, NO shared_ptr, NO virtual functions, NO dynamically sized containers. Fields: `float contraction` (0.0f..1.0f), `float bloom` (0.0f..1.0f), `int mode` (0 = Off, 1 = Articulation, and remaining existing adaptive mode enumerators encoded as ints), and a fixed-size C array `AdaptiveVoiceDeltas voices[kAdaptiveVoiceCount]` with `static constexpr int kAdaptiveVoiceCount = 2;`.\n2. `struct AdaptiveVoiceDeltas` - POD with `float wetLevelDeltaDb`, `float t60OctaveDelta`, `float lpfOctaveDelta`, `float widthDelta`, `float softeningDelta`, `float diffusionDelta`. All default-initialized to 0.0f so a default-constructed snapshot is the exact identity (no adaptation).\n3. `class AdaptiveSnapshotPublisher` - owns exactly two preallocated `AdaptiveSnapshot` members (a C array of size 2, never heap-allocated, never resized), a `std::atomic<int> activeIndex` and a `std::atomic<std::uint32_t> generation`. Methods:\n   - `void publish (const AdaptiveSnapshot& next) noexcept` - writes into the inactive buffer, then stores the new active index and increments the generation using `std::memory_order_release`.\n   - `bool read (AdaptiveSnapshot& destination) const noexcept` - loads the active index and generation with `std::memory_order_acquire`, copies the POD by value into `destination`, returns true when the generation observed before and after the copy match, false otherwise (caller keeps its previous snapshot on false).\n   - `std::uint32_t currentGeneration() const noexcept`.\n   All methods must be allocation-free, lock-free, and callable from the audio thread. `read` must not allocate, must not construct strings, and must not destroy heap-owned objects.\n\nAdd `static_assert (std::is_trivially_copyable<AdaptiveSnapshot>::value, ...)` and `static_assert (std::is_standard_layout<AdaptiveSnapshot>::value, ...)` in the header so violations fail at compile time.\n\nDo not modify DelayVoice, PluginProcessor, CMakeLists.txt, or anything under JUCE/. Do not add any third-party dependency.",
+  "acceptance_criteria": [
+    "Source/Analysis/AdaptiveSnapshot.h exists and declares struct AdaptiveSnapshot, struct AdaptiveVoiceDeltas, and class AdaptiveSnapshotPublisher",
+    "AdaptiveVoiceDeltas contains wetLevelDeltaDb, t60OctaveDelta, lpfOctaveDelta, widthDelta, softeningDelta, and diffusionDelta, all defaulted to 0.0f",
+    "AdaptiveSnapshotPublisher holds exactly two preallocated AdaptiveSnapshot buffers plus std::atomic active index and std::atomic generation counter, with no heap allocation and no std::shared_ptr anywhere in the header",
+    "publish uses std::memory_order_release and read uses std::memory_order_acquire, and read returns false when the generation changes mid-copy",
+    "Source/Analysis/AdaptiveSnapshot.h contains static_assert checks that AdaptiveSnapshot is trivially copyable and standard layout",
+    "cmake --build build --target ShredSpace_VST3 succeeds after this change",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Analysis/AdaptiveSnapshot.h"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "use std::atomic<std::shared_ptr> or any shared_ptr for cross-thread publication",
+    "store std::string, juce::String, or any heap-owning member inside AdaptiveSnapshot",
+    "add locks, mutexes, or dynamic allocation to publish or read",
+    "add any new third-party dependency",
+    "reference artist or song names in source or comments"
+  ],
+  "allowed_symbols": [
+    "AdaptiveSnapshot",
+    "AdaptiveVoiceDeltas",
+    "AdaptiveSnapshotPublisher",
+    "kAdaptiveVoiceCount",
+    "publish",
+    "read",
+    "currentGeneration"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose header include guard or #pragma once consistent with existing Source/Analysis headers",
+      "choose exact field ordering within the POD structs",
+      "add compile-time static_assert checks"
+    ],
+    "forbidden": [
+      "introduce a new cross-thread messaging framework",
+      "change the DelayVoice or PluginProcessor interfaces",
+      "introduce lock-based or allocating publication",
+      "define adaptive mode as an enum class that changes existing mode encodings"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

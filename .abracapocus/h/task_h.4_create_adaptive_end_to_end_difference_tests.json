@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "task_id": "h.4",
+  "phase": "H",
+  "phase_id": "h",
+  "title": "Create adaptive end to end difference tests",
+  "description": "Create tests/AdaptiveEndToEndTests.cpp and register it in CMakeLists.txt with the existing console unit-test runner target. This task is the serialized fan-in writer for CMakeLists.txt in phase h.\n\nBefore editing, inspect:\n- tests/ for an existing juce::UnitTest file to copy the registration pattern, fixture setup, and offline render helper style.\n- CMakeLists.txt for the existing test runner target and the list of test source files, and append the new file there only.\n- Source/PluginProcessor.h and Source/DSP/DelayVoice.h for how to instantiate the processor offline, set parameters, and render blocks.\n- Source/Analysis/AdaptiveSnapshot.h for the snapshot fields the tests reason about.\n\nUse ONLY the built-in juce::UnitTest framework. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new dependency may be added.\n\nWrite these tests, each rendering identical input through a freshly prepared processor instance:\n1. DEFINITION 0% versus 100% on a dense impulse-train input: assert the two renders differ by more than a small epsilon, and assert the measured wet level and effective tail energy contract at 100% relative to 0%.\n2. BLOOM 0% versus 100% on a sustained input containing a phrase gap: assert bloom increases measured tail energy and that the phrase gap reveals existing tail energy relative to the 0% render.\n3. Adaptive Mode Off versus Articulation on the same input: assert the renders are measurably different.\n4. Off mode versus the static (non-adaptive) path: assert sample-identical output within floating-point determinism, comparing every sample of both renders with a tolerance no larger than 1e-6f.\n5. Base parameter immutability: capture the base APVTS values of every adaptive destination before rendering, exercise macro, scene, and adaptive processing across many blocks, and assert every captured base value is unchanged afterward.\n\nAll tests must be deterministic: fixed sample rate, fixed block size, fixed generated input signals, no randomness without a fixed seed. Do not modify any Source/ file; if a test cannot observe something, assert on rendered audio rather than adding accessors.",
+  "acceptance_criteria": [
+    "tests/AdaptiveEndToEndTests.cpp exists and uses only the juce::UnitTest framework, with no Catch2, GoogleTest, or other third-party test framework",
+    "CMakeLists.txt registers tests/AdaptiveEndToEndTests.cpp with the existing console unit-test runner target and adds no other target or dependency",
+    "A test asserts DEFINITION 0% versus 100% on dense impulse-train input produces measurably different output with contracted wet level and tail energy at 100%",
+    "A test asserts BLOOM 0% versus 100% on sustained input with a phrase gap increases bloom and reveals existing tail energy in the gap",
+    "A test asserts Adaptive Mode Off versus Articulation produces measurably different output on identical input",
+    "A test asserts Off mode output is sample-identical to the static non-adaptive path, comparing every sample with a tolerance no larger than 1e-6f",
+    "A test captures base APVTS values of every adaptive destination, renders with macro, scene, and adaptive processing active, and asserts every base value is unchanged",
+    "cmake --build build --target ShredSpaceTests succeeds and ctest --test-dir build --output-on-failure passes, exercising the new AdaptiveEndToEnd tests",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/AdaptiveEndToEndTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify any file under Source/",
+    "use Catch2, GoogleTest, doctest, or any test framework other than juce::UnitTest",
+    "add any new third-party dependency or FetchContent declaration",
+    "add or rename CMake targets other than appending the new test source to the existing test runner target",
+    "introduce nondeterministic or unseeded random input in tests",
+    "weaken the sample-identical Off-mode comparison to a loose tolerance above 1e-6f",
+    "reference artist or song names in tests or comments"
+  ],
+  "allowed_symbols": [
+    "AdaptiveEndToEndTests",
+    "juce::UnitTest",
+    "AdaptiveSnapshot",
+    "ShredSpaceAudioProcessor"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the fixed sample rate, block size, and generated input waveforms used by the tests",
+      "add file-local helper functions for rendering and energy measurement inside the test file",
+      "choose measurement epsilons for the difference assertions other than the Off-mode identity tolerance"
+    ],
+    "forbidden": [
+      "add accessors or test hooks to production Source/ files",
+      "introduce a new test framework or test runner target",
+      "change the plugin parameter layout or default values",
+      "skip or disable any of the five required test cases"
+    ]
+  },
+  "dependencies": [
+    "h.3"
+  ],
+  "task_timeout_seconds": 2700,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

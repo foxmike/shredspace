@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "f.3",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Implement safety processor with mandatory and optional layers",
+  "description": "Create Source/DSP/SafetyProcessor.h and Source/DSP/SafetyProcessor.cpp implementing the two safety layers. No other file may be touched.\n\nBefore editing, inspect:\n- Source/DSP/FeedbackController.h (where the feedback gain request originates; read only)\n- Source/DSP/DelayVoice.h (how loop state is held; read only)\n- Source/PluginProcessor.h (how DSP modules are prepared and how atomics are published; read only)\n\nLayer 1, mandatory and never user-disableable:\n- Hard feedback cap at 0.985 applied to any requested gain.\n- NaN rejection and infinity rejection on wet samples.\n- DC blocker: y[n] = x[n] - x[n-1] + R*y[n-1] with R = 0.995.\n- Invalid-state muting, bounded state reset, and denormal handling.\n\nLayer 2, the optional user-facing Safety RMS limiter (enabled/disabled by a plain bool setter):\n- Squared-energy state: feedbackEnergy2[n] = alpha*feedbackEnergy2[n-1] + (1 - alpha)*sample*sample.\n- Level read as energy = sqrt(max(feedbackEnergy2, 0) + epsilon).\n- Threshold 0.90 linear.\n- reduction = min(1, threshold / (energy + epsilon)).\n- g_safe = min(0.985, g_requested * reduction).\n- Attack time constant 2 ms, release time constant 250 ms; alpha is selected per sample from attack or release depending on whether the energy is rising or falling.\n\nInvalid-state response sequence, in this exact order:\n1. Mute the affected wet output for the current block.\n2. Immediately reset lightweight state: filters, envelopes, detector states.\n3. Set an atomic safety-intervention flag (std::atomic<bool> or a std::atomic<uint32_t> counter), published with release semantics.\n4. Request clearing of large delay buffers at a bounded block boundary or incrementally. The SafetyProcessor must expose this as a request/consume flag; it must never itself clear megabytes mid-block.\n\nReal-time rules that are binding: allocate all state in prepare(); inside process perform no heap allocation, locks, file IO, string construction, GUI calls, buffer resizing, or unbounded loops. Do not use std::atomic<std::shared_ptr>. Telemetry is scalar atomics only.\n\nProvide at minimum: SafetyProcessor::prepare(double sampleRate, int maxBlockSize, int numChannels), reset(), setLimiterEnabled(bool), processBlock over a wet buffer, applyFeedbackCeiling(float g_requested) returning g_safe, safetyInterventionOccurred() reading the atomic flag with acquire semantics, and a consumable buffer-clear request accessor.",
+  "acceptance_criteria": [
+    "Source/DSP/SafetyProcessor.h declares prepare, reset, setLimiterEnabled, a block process entry point, a feedback ceiling application function, an intervention flag accessor, and a buffer-clear request accessor",
+    "Source/DSP/SafetyProcessor.cpp implements the DC blocker y[n] = x[n] - x[n-1] + 0.995*y[n-1]",
+    "Source/DSP/SafetyProcessor.cpp implements feedbackEnergy2 = alpha*feedbackEnergy2 + (1-alpha)*sample*sample with attack 2 ms and release 250 ms coefficients",
+    "Source/DSP/SafetyProcessor.cpp implements reduction = min(1, 0.90/(energy+epsilon)) and g_safe = min(0.985, g_requested*reduction)",
+    "Source/DSP/SafetyProcessor.cpp rejects NaN and infinity samples and applies the 0.985 cap on every path regardless of whether the optional limiter is enabled",
+    "Source/DSP/SafetyProcessor.cpp sets an atomic intervention flag with release semantics and exposes a buffer-clear request instead of clearing large delay buffers inline",
+    "Source/DSP/SafetyProcessor.cpp contains no std::atomic<std::shared_ptr>, and the process function contains no new/delete, malloc, buffer resize, juce::String construction, or lock acquisition",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpace_VST3 -j 4 succeeds",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/SafetyProcessor.h",
+    "Source/DSP/SafetyProcessor.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/RoutingEngine.h, Source/DSP/RoutingEngine.cpp, Source/DSP/FeedbackController.h, or Source/DSP/FeedbackController.cpp",
+    "modify Source/DSP/DelayVoice.h, Source/DSP/DelayVoice.cpp, Source/PluginProcessor.h, or Source/PluginProcessor.cpp",
+    "make any mandatory safety layer user-disableable",
+    "clear large delay buffers inside the per-block process function",
+    "use std::atomic<std::shared_ptr>",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "SafetyProcessor",
+    "SafetyProcessor::prepare",
+    "SafetyProcessor::reset",
+    "SafetyProcessor::setLimiterEnabled",
+    "SafetyProcessor::processBlock",
+    "SafetyProcessor::applyFeedbackCeiling",
+    "SafetyProcessor::safetyInterventionOccurred",
+    "SafetyProcessor::consumeBufferClearRequest"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the epsilon value and document it in a comment",
+      "choose internal state member names and the atomic flag type",
+      "choose how attack and release coefficients are precomputed in prepare"
+    ],
+    "forbidden": [
+      "introduce a limiter or dynamics library",
+      "replace the specified limiter equations with a peak or lookahead design",
+      "make the hard 0.985 cap conditional on the limiter enable flag",
+      "add safety behavior that mutates other DSP modules directly"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

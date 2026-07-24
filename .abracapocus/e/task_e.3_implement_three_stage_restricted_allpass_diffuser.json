@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "task_id": "e.3",
+  "phase": "E",
+  "phase_id": "e",
+  "title": "Implement three stage restricted allpass diffuser",
+  "description": "Create Source/DSP/ShortDiffuser.h and Source/DSP/ShortDiffuser.cpp implementing the restricted short diffusion stage for ShredSpace.\n\nBefore editing, inspect:\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (where the diffuser will later be called, after saturation and before the feedback tap)\n- Any existing Source/DSP/*.h module and match its namespace, pragma-once/header-guard style, include style, and naming conventions exactly\n- CMakeLists.txt (C++20 standard, JUCE modules available) but do not edit it\n\nRequired behavior (implement exactly these values and equations):\n1. Exactly three cascaded first-order allpass stages per channel. No more, no fewer, and no additional reverb tail structure.\n2. Transfer function per stage: H(z) = (-a + z^-M) / (1 - a*z^-M), realized by the difference equation y[n] = -a*x[n] + x[n-M] + a*y[n-M], where M is the stage delay in samples.\n3. Stage delays: left channel 3.1 ms, 4.7 ms, 6.9 ms; right channel 3.7 ms, 5.3 ms, 7.9 ms. Coefficients a: 0.45, 0.38, 0.32 for stages one, two, three on both channels. Convert milliseconds to samples using the prepared sample rate and round to an integer sample count of at least 1.\n4. User control d has range [0, 0.40]; the 0.40 cap applies to the normalized blend value before the equal-power law. Clamp d to [0, 0.40] on entry.\n5. Equal-power blend: z_diff = cos(pi*d/2)*z + sin(pi*d/2)*allpass(z), where z is the dry input to the diffuser and allpass(z) is the three-stage cascade output.\n6. Output must remain bounded (allpass stages have unity magnitude response; |a| < 1 guarantees stability). Introduce no independent late-reverb tail, no feedback across stages beyond the allpass recursions themselves, and no modulation of the stage delays.\n\nAPI shape: a class ShortDiffuser with prepare(double sampleRate, int maxBlockSize), reset(), setAmount(float d), and per-channel processing (channel index 0 = left delays, 1 = right delays). Allocate all stage delay lines in prepare, sized for the longest stage at the highest supported sample rate (192 kHz); the process path must never resize a buffer. Smooth d with a linear juce::SmoothedValue at 30 ms (normalized control).\n\nReal-time rules (binding): no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, or buffer resizing in the process path; all state allocated in prepare. reset() must clear all delay-line state to zero and leave no denormal residue.\n\nDo not modify DelayVoice, CMakeLists.txt, or any other file; integration and build registration happen in task e.5. No artist or song names may appear anywhere in the source.",
+  "acceptance_criteria": [
+    "Source/DSP/ShortDiffuser.h and Source/DSP/ShortDiffuser.cpp exist and declare/define a ShortDiffuser class with prepare, reset, setAmount, and per-channel processing",
+    "ShortDiffuser.cpp implements exactly three first-order allpass stages per channel using y[n] = -a*x[n] + x[n-M] + a*y[n-M]",
+    "Stage delays are 3.1/4.7/6.9 ms on the left channel and 3.7/5.3/7.9 ms on the right channel, with coefficients 0.45/0.38/0.32",
+    "The user amount d is clamped to [0, 0.40] and blended with z_diff = cos(pi*d/2)*z + sin(pi*d/2)*allpass(z)",
+    "ShortDiffuser output stays bounded for bounded input and adds no independent late-reverb tail or extra feedback path",
+    "All delay-line storage is allocated in prepare sized for 192 kHz; no allocation, locking, file IO, or string construction occurs in process-path functions",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/ShortDiffuser.h",
+    "Source/DSP/ShortDiffuser.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/DSP/ModulationEngine.h, Source/DSP/ModulationEngine.cpp, Source/DSP/SoftSaturator.h, Source/DSP/SoftSaturator.cpp, Source/DSP/StereoProcessor.h, or Source/DSP/StereoProcessor.cpp",
+    "modify anything under JUCE/",
+    "add any new third-party dependency",
+    "add more than three allpass stages per channel",
+    "raise the diffusion amount cap above 0.40",
+    "add a late-reverb tail, extra feedback network, or delay-line modulation to the diffuser",
+    "allocate memory, lock, construct strings, or perform file IO inside process-path functions",
+    "include artist or song names in source or comments"
+  ],
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

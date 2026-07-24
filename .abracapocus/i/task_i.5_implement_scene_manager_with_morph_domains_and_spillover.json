@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "task_id": "i.5",
+  "phase": "I",
+  "phase_id": "i",
+  "title": "Implement scene manager with morph domains and spillover",
+  "description": "Create ONLY Source/Profiles/SceneManager.h and Source/Profiles/SceneManager.cpp.\n\nBefore editing, inspect:\n- Source/Profiles/ProfileSchema.h for ProfileSceneValues and the four scene slots (task i.1).\n- Source/Profiles/ProfileManager.h for how a profile is selected (task i.2).\n- Source/Parameters/MacroEngine.h for MacroId, MacroDestination, and computeEffectiveValue (task i.4).\n- Source/Routing/RoutingEngine.h and Source/Delay/DelayTimeController.h from earlier phases for the existing wet-path crossfade and Smooth/Bend transition entry points. Do NOT modify any of these files.\nNever modify anything under JUCE/.\n\nImplement SceneManager for the four scenes per profile: A Tight, B Open, C Bloom, D Special. Each scene stores the eight macro targets, a Mix target, a routing target, and a Hold behavior.\n\nBinding rules:\n1. Scene influence is a delta, never a base rewrite: delta_scene = scene_target - base_value, combined internally through MacroEngine::computeEffectiveValue. SceneManager must never call setValueNotifyingHost, setValue, beginChangeGesture, or endChangeGesture, and must never rewrite base macro APVTS values.\n2. Continuous morphing between scene A and scene B with morph position lambda in [0,1]:\n   - linear domain: p = (1.0f - lambda) * p_A + lambda * p_B\n   - logarithmic domain: p = p_A * std::pow(p_B / p_A, lambda), used ONLY when both endpoints are strictly positive (frequency, delay time, T60, LFO rate). If either endpoint is not strictly positive, fall back to the linear form.\n3. Discrete values (routing target, Hold behavior) are never numerically interpolated. A discrete change is committed once, at the point specified by the existing routing transition, under the 30 ms equal-power wet-path crossfade provided by RoutingEngine.\n4. Delay-time changes implied by a scene change are routed through the existing Smooth/Bend transition engine (DelayTimeController), never through an ordinary SmoothedValue and never by direct read-pointer jumps.\n5. Spillover: a scene change must not clear, resize, or zero any delay buffer; existing tails continue to decay through the transition. Do not call any reset or clear on the delay lines from this module.\n6. Real-time contract: prepare(double sampleRate, int maxBlockSize) allocates all storage; the per-block path allocates nothing, takes no lock, builds no strings, does no IO, and has no unbounded loops.\n\nNo artist or song name may appear in any comment, string, or identifier.",
+  "acceptance_criteria": [
+    "Source/Profiles/SceneManager.h and Source/Profiles/SceneManager.cpp exist and declare SceneManager, SceneId with exactly A, B, C, D, prepare, setSceneValues, setMorphPosition, and getSceneDelta",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_core=1 Source/Profiles/SceneManager.cpp passes",
+    "Linear morphing implements p = (1 - lambda) * p_A + lambda * p_B and logarithmic morphing implements p = p_A * std::pow(p_B / p_A, lambda) guarded by both endpoints being strictly positive",
+    "Scene influence is computed as delta_scene = scene_target - base_value and combined through MacroEngine::computeEffectiveValue",
+    "Neither file contains setValueNotifyingHost, setValue on an APVTS parameter, beginChangeGesture, or endChangeGesture",
+    "Routing and Hold behavior changes are committed discretely through the RoutingEngine crossfade entry point and are never interpolated",
+    "Delay-time scene changes are dispatched through the DelayTimeController Smooth/Bend entry point and no delay buffer reset or clear is called from this module",
+    "The per-block path contains no new, malloc, juce::String construction, lock, or file IO",
+    "No artist or song name appears in either file",
+    "No file outside this task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Profiles/SceneManager.h",
+    "Source/Profiles/SceneManager.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Profiles/ProfileSchema.*, Source/Profiles/ProfileManager.*, or Source/Profiles/ProfileSnapshot.*",
+    "modify Source/Parameters/MacroEngine.h or Source/Parameters/MacroEngine.cpp",
+    "modify Source/Routing/RoutingEngine.h, Source/Routing/RoutingEngine.cpp, or any DelayVoice or FeedbackController file",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "call setValueNotifyingHost, setValue, beginChangeGesture, or endChangeGesture",
+    "numerically interpolate routing or Hold behavior values",
+    "clear, reset, or resize any delay buffer during a scene change",
+    "use an ordinary SmoothedValue for delay-time changes",
+    "add any new third-party dependency",
+    "include artist or song names in comments, strings, or identifiers"
+  ],
+  "allowed_symbols": [
+    "SceneManager",
+    "SceneId",
+    "SceneValues",
+    "SceneManager::prepare",
+    "SceneManager::setSceneValues",
+    "SceneManager::setMorphPosition",
+    "SceneManager::getSceneDelta",
+    "SceneManager::getMixDelta",
+    "morphLinear",
+    "morphLogarithmic",
+    "kSceneCount"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the internal storage layout for the four scenes",
+      "choose the per-destination domain lookup mechanism",
+      "add local static helpers inside SceneManager.cpp"
+    ],
+    "forbidden": [
+      "introduce a new transition or crossfade engine instead of RoutingEngine and DelayTimeController",
+      "change the profile schema or macro engine interfaces",
+      "write base values back to the APVTS",
+      "add a fifth scene or a variable scene count"
+    ]
+  },
+  "dependencies": [
+    "i.2",
+    "i.4"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

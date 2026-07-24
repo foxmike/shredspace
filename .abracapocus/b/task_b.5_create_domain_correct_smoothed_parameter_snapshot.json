@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task_id": "b.5",
+  "phase": "B",
+  "phase_id": "b",
+  "title": "Create domain correct smoothed parameter snapshot",
+  "description": "Create Source/Parameters/ParameterSnapshot.h and Source/Parameters/ParameterSnapshot.cpp ONLY. This provides the per-block, real-time-safe snapshot of smoothed parameter values consumed by the audio thread.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterIDs.h (all IDs)\n- Source/Parameters/ParameterLayout.h and Source/Parameters/ParameterLayout.cpp (parameter set, ranges, defaults)\n- Source/PluginProcessor.h (prepareToPlay signature; the processor allocates the snapshot in b.6)\n\nAPI (namespace shredspace):\n- `class ParameterSnapshot` with:\n  - `void prepare (double sampleRate, int maximumBlockSize, juce::AudioProcessorValueTreeState& apvts);` \u2014 performs ALL allocation and caches raw std::atomic<float>* pointers obtained from apvts.getRawParameterValue for every parameter. Sets every smoother to its current target immediately (no ramp on prepare).\n  - `void updateFromParameters();` \u2014 called ONCE at the top of processBlock, before audio processing. Reads the cached atomic pointers, sets smoother targets, and performs no allocation, no locking, no string construction, and no APVTS tree traversal.\n  - `void advance (int numSamples);` or per-sample `float getNextX()` accessors \u2014 choose one consistent style and document it. Advancing must not allocate.\n  - const accessors returning the current effective values.\n- A plain POD-style nested struct or member fields holding the resolved values. No std::string, no juce::String, no heap-owning members touched after prepare.\n\nSMOOTHING DOMAIN RULES (binding \u2014 implement exactly):\n- juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> for: all dB values, Mix, pan, width, signed offsets, and normalized 0-100% controls. dB values are smoothed IN dB and converted to linear only AFTER smoothing, via g = std::pow (10.0f, dB / 20.0f). Never smooth a linear gain that was converted before smoothing.\n- juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> ONLY for strictly positive quantities: filter frequencies (HPF, LPF, presence frequency, LF-mono crossover, transient crossover), T60 / tail times, and LFO/modulation rates. Multiplicative smoothers must never be initialized to or targeted with a value <= 0; clamp targets to the parameter minimum.\n- INITIAL SMOOTHING TIMES: gain and Mix 20 ms; filter frequency 50 ms; T60 / feedback target 50 ms; width 50 ms; pan 30 ms; normalized expert controls 30 ms. Define these as named constexpr constants in the header.\n- DELAY TIME IS EXCLUDED ENTIRELY. PERF_MACRO_TIME, VOICE_A_TIME_RATIO, VOICE_B_TIME_RATIO, the fine offsets, stereo offsets, TIME_GLIDE and the sync division must NOT be smoothed here; the Smooth/Bend transition engine owns delay-time transitions in a later phase. Expose these as raw target values only, with a comment stating that Smooth/Bend owns them.\n- Bool and choice parameters are exposed as bool/int without smoothing.\n\nREAL-TIME CONTRACT: all buffers and smoother storage are allocated in prepare(). updateFromParameters() and advance() must contain no heap allocation, no locks, no file IO, no string construction, no GUI calls, no unbounded loops, no buffer resizing, and no destruction of heap-owned objects. Add a comment at the top of each real-time method restating this. Do not add juce::ScopedNoDenormals here; it belongs at the top of processBlock.\n\nDo not modify ParameterLayout, ParameterIDs, PluginProcessor, or CMakeLists.txt. No third-party dependency. No artist or song names.",
+  "acceptance_criteria": [
+    "Source/Parameters/ParameterSnapshot.h declares shredspace::ParameterSnapshot with prepare, updateFromParameters, and an advance or per-sample accessor API",
+    "g++ -std=c++20 -fsyntax-only -I JUCE/modules -I Source -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_audio_processors=1 -DJUCE_STANDALONE_APPLICATION=0 Source/Parameters/ParameterSnapshot.cpp passes with no errors",
+    "All dB-domain values in Source/Parameters/ParameterSnapshot.cpp are smoothed with ValueSmoothingTypes::Linear and converted to linear gain after smoothing using std::pow (10.0f, dB / 20.0f)",
+    "ValueSmoothingTypes::Multiplicative is used only for filter frequencies, tail/T60 times, and modulation rates in Source/Parameters/ParameterSnapshot.cpp",
+    "Source/Parameters/ParameterSnapshot.h defines named constexpr smoothing times of 20 ms for gain and Mix, 50 ms for filter frequency, 50 ms for T60, 50 ms for width, 30 ms for pan, and 30 ms for normalized expert controls",
+    "No delay-time parameter is smoothed in Source/Parameters/ParameterSnapshot.cpp and a comment states that the Smooth/Bend engine owns delay-time transitions",
+    "updateFromParameters and the advance path in Source/Parameters/ParameterSnapshot.cpp contain no heap allocation, locking, string construction, or buffer resizing",
+    "No file outside Source/Parameters/ParameterSnapshot.h and Source/Parameters/ParameterSnapshot.cpp is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Parameters/ParameterSnapshot.h",
+    "Source/Parameters/ParameterSnapshot.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Parameters/ParameterLayout.h or Source/Parameters/ParameterLayout.cpp",
+    "modify Source/Parameters/ParameterIDs.h",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "allocate memory, lock, construct strings, or resize buffers outside prepare()",
+    "smooth any delay-time parameter",
+    "use Multiplicative smoothing for a value that can be zero or negative",
+    "convert dB to linear before smoothing",
+    "add any third-party dependency"
+  ],
+  "allowed_symbols": [
+    "shredspace::ParameterSnapshot",
+    "prepare",
+    "updateFromParameters",
+    "advance"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose between block-wise advance and per-sample accessor style",
+      "choose the internal field layout of the resolved value struct"
+    ],
+    "forbidden": [
+      "introduce a lock-free double-buffer or generation-counter publication scheme here (that belongs to the profile/adaptive path in a later phase)",
+      "change the APVTS layout or parameter set",
+      "add DSP processing beyond value smoothing"
+    ]
+  },
+  "dependencies": [
+    "b.4"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

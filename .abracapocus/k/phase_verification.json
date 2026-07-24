@@ -1,0 +1,38 @@
+{
+  "verification": {
+    "checks": [
+      {
+        "name": "validate_script_syntax",
+        "command": [
+          "bash",
+          "-n",
+          "scripts/validate_plugin.sh"
+        ]
+      },
+      {
+        "name": "cmake_configure_linux_release",
+        "command": [
+          "cmake",
+          "--preset",
+          "linux-release"
+        ]
+      },
+      {
+        "name": "full_validation_script",
+        "command": [
+          "bash",
+          "scripts/validate_plugin.sh"
+        ]
+      },
+      {
+        "name": "ctest_full_suite",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build/linux-release",
+          "--output-on-failure"
+        ]
+      }
+    ]
+  }
+}

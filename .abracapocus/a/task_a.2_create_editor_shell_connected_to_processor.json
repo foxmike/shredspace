@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task_id": "a.2",
+  "phase": "A",
+  "phase_id": "a",
+  "title": "Create editor shell connected to processor",
+  "description": "Create the minimal resizable ShredSpace editor in Source/PluginEditor.h and Source/PluginEditor.cpp, and connect the processor to it.\n\nBefore editing, inspect:\n- Source/PluginProcessor.h and Source/PluginProcessor.cpp created by task a.1, specifically the class name ShredSpaceAudioProcessor and the createEditor()/hasEditor() implementations.\n- ./JUCE/modules/juce_audio_processors/processors/juce_AudioProcessorEditor.h for the AudioProcessorEditor constructor and setResizable/setResizeLimits signatures.\n\nImplement exactly:\n1. class ShredSpaceAudioProcessorEditor : public juce::AudioProcessorEditor in Source/PluginEditor.h, with an explicit constructor taking ShredSpaceAudioProcessor& and a destructor, plus paint(juce::Graphics&) and resized() overrides, and JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ShredSpaceAudioProcessorEditor).\n2. Hold the processor by reference in a private member named audioProcessor (type ShredSpaceAudioProcessor&). Do not copy or own the processor.\n3. In the constructor: call setResizable (true, true), setResizeLimits (600, 400, 2400, 1600), and setSize (900, 600).\n4. paint() fills the whole bounds with getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId), then draws the single centred text \"ShredSpace\" using juce::Justification::centred. No artist names, no song names, no vendor tagline beyond the product name.\n5. resized() is present and empty (no child components exist yet).\n6. In Source/PluginProcessor.cpp, replace the a.1 placeholder so that `#include \"PluginEditor.h\"` is present and createEditor() returns `new ShredSpaceAudioProcessorEditor (*this)`. This is the ONLY change permitted to Source/PluginProcessor.cpp in this task: do not alter isBusesLayoutSupported, processBlock, prepareToPlay, releaseResources, or any other member.\n\nNo DSP, no parameter attachments, no sliders, no timers, no image or font resources in this task.",
+  "acceptance_criteria": [
+    "Source/PluginEditor.h declares ShredSpaceAudioProcessorEditor deriving from juce::AudioProcessorEditor with a constructor taking ShredSpaceAudioProcessor&",
+    "Source/PluginEditor.cpp constructor calls setResizable(true, true), setResizeLimits(600, 400, 2400, 1600), and setSize(900, 600)",
+    "Source/PluginEditor.cpp paint() draws the centred text \"ShredSpace\" and contains no artist or song names",
+    "Source/PluginProcessor.cpp includes \"PluginEditor.h\" and createEditor() returns new ShredSpaceAudioProcessorEditor (*this)",
+    "Source/PluginProcessor.cpp isBusesLayoutSupported and processBlock bodies are unchanged from task a.1",
+    "Only Source/PluginEditor.h, Source/PluginEditor.cpp, and Source/PluginProcessor.cpp are created or modified by this task"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/PluginEditor.h",
+    "Source/PluginEditor.cpp",
+    "Source/PluginProcessor.cpp"
+  ],
+  "forbidden_changes": [
+    "create or modify any file under JUCE/",
+    "modify Source/PluginProcessor.h",
+    "modify any part of Source/PluginProcessor.cpp other than adding the PluginEditor.h include and the createEditor() return statement",
+    "create or modify CMakeLists.txt or CMakePresets.json",
+    "create or modify scripts/build_all.sh, .gitignore, or anything under docs/",
+    "add sliders, buttons, parameter attachments, timers, or custom LookAndFeel classes",
+    "add binary resources, images, or fonts",
+    "add any new third-party dependency",
+    "include artist or song names in any string"
+  ],
+  "allowed_symbols": [
+    "ShredSpaceAudioProcessorEditor",
+    "audioProcessor",
+    "paint",
+    "resized",
+    "createEditor"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the font size and colour used for the centred \"ShredSpace\" text",
+      "choose include order and include guard style"
+    ],
+    "forbidden": [
+      "introduce child components or parameter attachments",
+      "introduce a custom LookAndFeel or resource binary",
+      "change the processor class name or its bus layout contract",
+      "add build system files"
+    ]
+  },
+  "dependencies": [
+    "a.1"
+  ],
+  "task_timeout_seconds": 1200,
+  "verification_commands": []
+}

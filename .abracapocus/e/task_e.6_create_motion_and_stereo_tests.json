@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "task_id": "e.6",
+  "phase": "E",
+  "phase_id": "e",
+  "title": "Create motion and stereo tests",
+  "description": "Create tests/MotionStereoTests.cpp using the built-in juce::UnitTest framework and register it in CMakeLists.txt for the existing console test-runner target executed through CTest. This is a serialized fan-in write to CMakeLists.txt and runs after task e.5.\n\nBefore editing, inspect:\n- An existing tests/*.cpp file from an earlier phase (copy its juce::UnitTest subclass pattern, static instance registration, and assertion style exactly)\n- CMakeLists.txt as left by task e.5 (the test-runner target, its target_sources list, and the add_test/CTest registration)\n- Source/DSP/ModulationEngine.h, Source/DSP/SoftSaturator.h, Source/DSP/ShortDiffuser.h, Source/DSP/StereoProcessor.h for the actual APIs to exercise\n\nRequired test coverage (each an explicit assertion, not a smoke test):\n1. Modulation: the engine's requested LFO rate is honored (measure the produced period against 2*pi*rate*n/Fs) and the right-channel phase equals the left-channel phase plus the configured offset.\n2. Modulation continuity and bounds: successive modulated delay positions change continuously (no discontinuity larger than a small tolerance per sample) and every position stays within [8 samples, 8.25 seconds].\n3. Rack pitch cap: at a fast rate (for example 5 Hz) with a large requested depth, the effective peak rate deviation 2*pi*rate*depthEffective is less than or equal to 2^(25/1200) - 1 within tolerance; at a slow rate (for example 0.1 Hz) the full requested depth is honored (depthEffective equals depthUser).\n4. Saturator: at amount 0 the output equals the input exactly (transparent); the small-signal slope near x = 0 is unity within tolerance for several amounts; output is finite for large inputs.\n5. Diffuser: output is bounded for bounded input; the allpass cascade magnitude response is near unity for a broadband test signal (compare input and output RMS within tolerance); requesting an amount above 0.40 is clamped to 0.40, verified by comparing the output against an explicit amount-0.40 run for numeric equality.\n6. Stereo: the mid/side width math at w = 1 is an exact round-trip, verified by comparing processed output against the original L/R input sample-for-sample within floating-point tolerance; low-frequency mono collapses a below-crossover out-of-phase test tone toward mono while an above-crossover tone retains its stereo difference.\n\nConstraints: use only juce::UnitTest. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new third-party dependency may be added. Tests may allocate freely (they are not real-time code), but must call prepare() before any process call and must be deterministic - seed any randomness explicitly and assert on tolerances, not on exact floating-point equality except where the criteria above require exactness.\n\nRegister tests/MotionStereoTests.cpp in the existing test-runner target's source list in CMakeLists.txt, following the existing convention. Do not create a new target, do not change existing targets' names, and do not alter plugin metadata or presets.\n\nAfter editing, verify with: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo, cmake --build build -j, then ctest --test-dir build --output-on-failure. No artist or song names may appear anywhere in the test source.",
+  "acceptance_criteria": [
+    "tests/MotionStereoTests.cpp exists and defines a juce::UnitTest subclass with a static instance, using no third-party test framework",
+    "tests/MotionStereoTests.cpp asserts the requested LFO rate and the right-channel phase offset, and asserts modulated delay positions are continuous and within [8 samples, 8.25 seconds]",
+    "tests/MotionStereoTests.cpp asserts that at a fast rate the effective peak rate deviation does not exceed 2^(25/1200)-1 and that at a slow rate the full requested depth is honored",
+    "tests/MotionStereoTests.cpp asserts the saturator is transparent at amount 0, has unity small-signal slope, and produces finite output for large inputs",
+    "tests/MotionStereoTests.cpp asserts the diffuser output is bounded with near-unity magnitude and that an amount above 0.40 produces output numerically identical to an explicit amount-0.40 run",
+    "tests/MotionStereoTests.cpp asserts the mid/side width math at w=1 reproduces the input L and R sample-for-sample within floating-point tolerance, and asserts low-frequency mono behavior below and above the crossover",
+    "CMakeLists.txt registers tests/MotionStereoTests.cpp in the existing console test-runner target",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo configures and cmake --build build -j builds successfully",
+    "ctest --test-dir build --output-on-failure passes with the new motion and stereo tests included",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/MotionStereoTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify Source/DSP/ModulationEngine.h, Source/DSP/ModulationEngine.cpp, Source/DSP/SoftSaturator.h, Source/DSP/SoftSaturator.cpp, Source/DSP/ShortDiffuser.h, Source/DSP/ShortDiffuser.cpp, Source/DSP/StereoProcessor.h, Source/DSP/StereoProcessor.cpp, Source/DSP/DelayVoice.h, or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginProcessor.* or Source/PluginEditor.*",
+    "modify CMakePresets.json",
+    "modify anything under JUCE/",
+    "use Catch2, GoogleTest, or any test framework other than juce::UnitTest",
+    "add any new third-party dependency",
+    "create a new CMake target or rename existing targets",
+    "change plugin metadata or the JUCE submodule pin",
+    "weaken assertions to make failing DSP behavior pass",
+    "include artist or song names in source or comments"
+  ],
+  "dependencies": [
+    "e.5"
+  ],
+  "task_timeout_seconds": 2400,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

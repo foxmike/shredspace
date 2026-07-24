@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "task_id": "a.4",
+  "phase": "A",
+  "phase_id": "a",
+  "title": "Create paste and run build script and gitignore",
+  "description": "Create scripts/build_all.sh and .gitignore. The script must be paste-and-run with zero editing and no placeholders.\n\nBefore editing, inspect:\n- CMakePresets.json (created by a.3) for the exact preset name linux-release and its binaryDir build/linux-release.\n- CMakeLists.txt (created by a.3) for the target name ShredSpace and the FORMATS list VST3 LV2 Standalone.\n- The directory listing of build/linux-release/ShredSpace_artefacts/Release after a build, to confirm the real on-disk artifact paths for the VST3, LV2, and Standalone outputs under the pinned JUCE revision.\n\nImplement exactly:\n1. scripts/build_all.sh begins with #!/usr/bin/env bash. It must NOT use `set -e` (explicitly forbidden), so that every artifact check runs and reports even after an earlier failure. It may use `set -u` and `set -o pipefail` only if that does not abort on a failed check.\n2. The script resolves the repository root from its own location (for example REPO_ROOT=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)\") so it runs correctly from any working directory. No hard-coded absolute paths, no ~ expansion assumptions, no TODO or FIXME or <fill-in> placeholders of any kind.\n3. It runs `cmake --preset linux-release` then `cmake --build build/linux-release`, capturing each exit status and printing an explicit line for each step.\n4. It then checks existence of all three Linux artifacts under build/linux-release/ShredSpace_artefacts/Release: the VST3 bundle, the LV2 bundle, and the Standalone executable. For EACH artifact it prints exactly one line of the form \"PASS: VST3 <path>\" or \"FAIL: VST3 <path>\", and likewise for LV2 and Standalone. All three checks always run.\n5. It ends by printing a summary line and exiting 0 when all three artifacts exist and configure and build both succeeded, or exiting 1 otherwise.\n6. The file is created with the executable bit set (chmod +x scripts/build_all.sh).\n7. .gitignore covers at minimum: build/, build-*/, cmake-build-*/, .cache/, compile_commands.json, .vscode/, .idea/, *.user, .DS_Store, and *.swp. It must NOT ignore JUCE/ and must NOT ignore anything under Source/, scripts/, or docs/.\n\nUse only explicit cmake commands; never make or cppcheck.",
+  "acceptance_criteria": [
+    "scripts/build_all.sh exists, starts with #!/usr/bin/env bash, and is executable",
+    "scripts/build_all.sh contains no 'set -e' line",
+    "scripts/build_all.sh contains no placeholder text such as TODO, FIXME, <fill-in>, or PATH_TO",
+    "scripts/build_all.sh invokes cmake --preset linux-release and cmake --build build/linux-release",
+    "scripts/build_all.sh prints one explicit PASS or FAIL line for each of the VST3, LV2, and Standalone artifacts, and all three checks run unconditionally",
+    "bash -n scripts/build_all.sh exits with status 0",
+    "bash scripts/build_all.sh exits with status 0 and prints PASS for all three artifacts",
+    ".gitignore ignores build/ and IDE state directories and does not ignore JUCE/, Source/, scripts/, or docs/",
+    "Only scripts/build_all.sh and .gitignore are created or modified by this task"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "scripts/build_all.sh",
+    ".gitignore"
+  ],
+  "forbidden_changes": [
+    "create or modify any file under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify any file under Source/",
+    "create or modify anything under docs/",
+    "use 'set -e' in scripts/build_all.sh",
+    "leave any placeholder, TODO, or path the operator must edit before running",
+    "hard-code an absolute repository path",
+    "invoke make, cppcheck, clang-tidy, or any tool other than cmake and shell builtins",
+    "add any new third-party dependency",
+    "ignore JUCE/, Source/, scripts/, or docs/ in .gitignore"
+  ],
+  "allowed_symbols": [
+    "REPO_ROOT",
+    "check_artifact",
+    "build_all.sh"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose shell helper function names and the exact summary line wording",
+      "choose whether to use set -u and set -o pipefail",
+      "choose how to resolve the repository root from BASH_SOURCE"
+    ],
+    "forbidden": [
+      "introduce a Makefile, CMake changes, or a second build entry point",
+      "introduce a build system wrapper in another language",
+      "change preset names or artifact directory layout",
+      "add cleanup logic that deletes source or JUCE files"
+    ]
+  },
+  "dependencies": [
+    "a.3"
+  ],
+  "task_timeout_seconds": 1200,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

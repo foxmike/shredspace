@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "task_id": "j.4",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Implement performance page",
+  "description": "Create Source/GUI/PerformancePage.h and Source/GUI/PerformancePage.cpp implementing `class PerformancePage : public juce::Component`, the primary performance view.\n\nContents: the eight macro controls, the profile browser (juce::ComboBox listing available profiles plus load action), four scene buttons, global Mix, input level, output level, bypass, tap tempo, Hold, adaptive mode selector, the status indicators, and an owned MeterComponent instance.\n\nBinding layering rule: macro controls talk to the MacroEngine only. A macro control must NEVER call `setValueNotifyingHost` on a coordinated destination parameter and must never rewrite base APVTS values for destinations. Only explicit profile recall may replace base APVTS values, and only on the message thread. Macro, scene, and adaptive contributions are deltas combined internally by the engine.\n\nThis page owns its own APVTS attachments (`juce::AudioProcessorValueTreeState::SliderAttachment`, `ButtonAttachment`, `ComboBoxAttachment`) held in `std::unique_ptr` members. Use the exact parameter ID strings declared in the parameter layout header \u2014 do not invent IDs.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterLayout.h (authoritative parameter ID constants; use these verbatim)\n- Source/Macro/MacroEngine.h (or the actual macro engine header present in Source/) for the macro set-value entry point\n- Source/GUI/MeterComponent.h and Source/GUI/CustomLookAndFeel.h\n- Source/PluginProcessor.h (accessors for the APVTS, the macro engine, and getTelemetryState)\n\nConstructor signature should take the processor (or its APVTS plus engine references) by reference. Implement `resized()` with a proportional juce::FlexBox or Rectangle-based layout so the page works in a resizable editor. Do not register the files in CMakeLists.txt; j.8 owns that.",
+  "acceptance_criteria": [
+    "Source/GUI/PerformancePage.h declares class PerformancePage deriving from juce::Component",
+    "Source/GUI/PerformancePage.cpp constructs eight macro controls, a profile browser combo box, four scene buttons, and controls for Mix, input, output, bypass, tap tempo, Hold, and adaptive mode",
+    "Source/GUI/PerformancePage.h holds APVTS attachments as std::unique_ptr members owned by the page",
+    "Every parameter ID string used in Source/GUI/PerformancePage.cpp matches an ID declared in Source/Parameters/ParameterLayout.h",
+    "No macro control callback in Source/GUI/PerformancePage.cpp calls setValueNotifyingHost on a coordinated destination parameter; macro changes route through the macro engine entry point",
+    "Source/GUI/PerformancePage.cpp owns a MeterComponent instance and implements resized() with a proportional layout",
+    "Source/GUI/PerformancePage.h and .cpp include no header from Source/DSP other than the processor header needed for parameter and engine access",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/GUI/PerformancePage.h",
+    "Source/GUI/PerformancePage.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.*, Source/PluginEditor.*, Source/Parameters/*, or any macro/scene engine file",
+    "modify Source/GUI/MeterComponent.*, Source/GUI/CustomLookAndFeel.*, or any other page file",
+    "call setValueNotifyingHost on coordinated destination parameters from macro controls",
+    "invent parameter ID strings not present in Source/Parameters/ParameterLayout.h",
+    "add new third-party dependencies",
+    "use any artist or song name"
+  ],
+  "allowed_symbols": [
+    "PerformancePage",
+    "resized",
+    "paint"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose control layout, grouping, and label text",
+      "choose slider styles and rotary versus linear per control"
+    ],
+    "forbidden": [
+      "add or remove APVTS parameters",
+      "change the macro engine interface",
+      "write destination parameters directly from macro controls"
+    ]
+  },
+  "dependencies": [
+    "j.3"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

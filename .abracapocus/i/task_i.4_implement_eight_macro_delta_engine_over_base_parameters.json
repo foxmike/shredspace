@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "task_id": "i.4",
+  "phase": "I",
+  "phase_id": "i",
+  "title": "Implement eight macro delta engine over base parameters",
+  "description": "Create ONLY Source/Parameters/MacroEngine.h and Source/Parameters/MacroEngine.cpp.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterLayout.h and Source/Parameters/ParameterLayout.cpp (frozen in phase b) for parameter IDs, ranges, defaults, and which parameters are dB-domain, octave-scaled, or plain linear. Do NOT modify them.\n- Source/PluginProcessor.h (read only) for the APVTS accessor; do NOT modify it.\nNever modify anything under JUCE/. This task depends only on the frozen phase-b parameter system.\n\nImplement MacroEngine covering the eight macros TIME, SPACE, DEFINITION, BLOOM, TAIL, FOCUS, WIDTH, CHARACTER, in that order.\n\nBinding mathematics:\n1. For a normalized macro value u in [0,1] and a destination entry {deltaMin, deltaMax, curve} with curve > 0 (default 1.0): u_curved = std::pow(u, curve); delta = deltaMin + u_curved * (deltaMax - deltaMin). Clamp u to [0,1] before the power. Guard curve <= 0 by substituting 1.0.\n2. Layering into effective values, never into the APVTS:\n   - linear domain: p_eff = clamp(p_base + d_macro + d_scene + d_adaptive, p_min, p_max)\n   - dB domain: same additive form computed in dB, converted to linear afterwards only via g = std::pow(10.0f, G_dB / 20.0f)\n   - octave-scaled domain: p_eff = clamp(p_base * std::exp2(d_macro_oct + d_scene_oct + d_adaptive_oct), p_min, p_max)\n   Provide computeEffectiveValue(domain, base, macroDelta, sceneDelta, adaptiveDelta, min, max).\n3. MacroEngine NEVER calls setValueNotifyingHost, setValue, beginChangeGesture, endChangeGesture, or otherwise writes any APVTS parameter. It only reads base values and produces deltas and effective values. State this as a comment at the top of both files.\n4. Macro coordination tables come from the profile-supplied destination tables passed in; the engine hardcodes no destination IDs. Document the intended coordination in comments only: SPACE coordinates voice levels, wet prominence, diffusion, and bloom availability; DEFINITION coordinates contraction strength destinations; BLOOM coordinates bloom strength destinations; FOCUS coordinates HPF, LPF, guard, and softening; WIDTH coordinates pan, width, offset, cross-feedback, modulation phase, and LF mono; CHARACTER coordinates saturation, modulation depth, drift, diffusion, attack softness, and bandwidth; TIME drives the DelayTimeController; TAIL sets nominal T60.\n5. Real-time contract: setDestinationTable(...) and prepare(double sampleRate, int maxBlockSize) allocate all storage; the per-block evaluation path allocates nothing, takes no lock, constructs no strings, does no IO, and contains no unbounded loops. Macro positions are smoothed with linear juce::SmoothedValue over 30 ms (normalized expert-control smoothing time); dB-domain destinations are smoothed in dB before conversion to linear.\n\nNo artist or song name may appear in any comment, string, or identifier.",
+  "acceptance_criteria": [
+    "Source/Parameters/MacroEngine.h and Source/Parameters/MacroEngine.cpp exist and declare MacroEngine, MacroId, MacroDestination, prepare, setDestinationTable, setMacroValue, and computeEffectiveValue",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_core=1 Source/Parameters/MacroEngine.cpp passes",
+    "MacroId enumerates exactly TIME, SPACE, DEFINITION, BLOOM, TAIL, FOCUS, WIDTH, CHARACTER in that order",
+    "Delta computation implements delta = deltaMin + std::pow(clamped_u, curve) * (deltaMax - deltaMin) with curve <= 0 substituted by 1.0",
+    "computeEffectiveValue implements the linear, dB, and octave-scaled clamp forms with dB converted to linear only via std::pow(10.0f, dB / 20.0f)",
+    "Neither file contains setValueNotifyingHost, setValue on an APVTS parameter, beginChangeGesture, or endChangeGesture",
+    "The per-block evaluation path contains no new, malloc, juce::String construction, lock, or file IO",
+    "Macro position smoothing uses linear juce::SmoothedValue with a 30 ms ramp",
+    "No artist or song name appears in either file",
+    "No file outside this task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Parameters/MacroEngine.h",
+    "Source/Parameters/MacroEngine.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Parameters/ParameterLayout.h or Source/Parameters/ParameterLayout.cpp",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify Source/PluginEditor.h or Source/PluginEditor.cpp",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "call setValueNotifyingHost, setValue, beginChangeGesture, or endChangeGesture on any APVTS parameter",
+    "hardcode profile destination parameter IDs in the engine",
+    "allocate, lock, construct strings, or perform IO in the per-block evaluation path",
+    "use multiplicative SmoothedValue for signed or dB-domain values",
+    "add any new third-party dependency",
+    "include artist or song names in comments, strings, or identifiers"
+  ],
+  "allowed_symbols": [
+    "MacroEngine",
+    "MacroId",
+    "MacroDestination",
+    "MacroDestinationTable",
+    "ParameterDomain",
+    "MacroEngine::prepare",
+    "MacroEngine::setDestinationTable",
+    "MacroEngine::setMacroValue",
+    "MacroEngine::processDeltas",
+    "MacroEngine::getMacroDelta",
+    "computeEffectiveValue",
+    "kMacroCount"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the fixed capacity for destinations per macro",
+      "choose internal smoothing member layout",
+      "add local static helpers inside MacroEngine.cpp"
+    ],
+    "forbidden": [
+      "introduce a modulation-matrix framework",
+      "change the frozen parameter layout or add parameters",
+      "write to the APVTS from this module",
+      "define the profile schema or the snapshot format here"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

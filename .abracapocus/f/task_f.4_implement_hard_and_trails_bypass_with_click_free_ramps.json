@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "task_id": "f.4",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Implement hard and trails bypass with click free ramps",
+  "description": "Extend Source/DSP/RoutingEngine.h and Source/DSP/RoutingEngine.cpp (owned earlier by f.1; this is the serialized second write) with hard bypass and trails bypass. Preserve everything f.1 implemented.\n\nBefore editing, inspect:\n- Source/DSP/RoutingEngine.h and .cpp as produced by f.1 (topologies, normalization, mixing, 30 ms wet-path crossfade)\n- Source/DSP/FeedbackController.h as produced by f.2 (cross-feedback surface; read only)\n- Source/DSP/DelayVoice.h (delay input path; read only)\n\nRequired behavior, restated so no external document is needed:\n- Hard bypass: fade the wet path out, retain the dry path unchanged, stop delay input, and clear the remaining tail only after the fade transition completes. Do not clear the tail mid-transition.\n- Trails bypass: stop new delay input via delayInput = (1 - bypassRamp)*input while the existing tail decays naturally and the dry path continues unchanged.\n- Both bypass transitions are 20 ms and must be click-free. Use a dedicated transition ramp member, not an ordinary juce::SmoothedValue.\n- The 30 ms routing crossfade from f.1 and the 20 ms bypass ramp are independent transition engines and must not be merged into a single ramp.\n- Expose the current delay-input scaling to the caller so PluginProcessor can attenuate voice input during trails bypass, and expose a consumable \"tail clear now\" signal that becomes true exactly once when a hard-bypass fade completes.\n\nReal-time rules that are binding: no heap allocation, locks, IO, string construction, GUI calls, buffer resizing, or unbounded loops inside the block process function; all ramp state and scratch buffers are allocated in prepare().\n\nProvide at minimum: setBypassMode(BypassMode) with Off, Hard, and Trails states, delayInputGain() returning the current ramped delay-input scale, and consumeTailClearRequest().",
+  "acceptance_criteria": [
+    "Source/DSP/RoutingEngine.h declares a bypass mode setter with Off, Hard, and Trails states, a delay-input gain accessor, and a consumable tail-clear request accessor",
+    "Source/DSP/RoutingEngine.cpp implements trails bypass as delayInput = (1 - bypassRamp)*input while leaving the dry path unmodified",
+    "Source/DSP/RoutingEngine.cpp implements hard bypass as a wet-path fade out that retains dry and only signals tail clearing after the transition completes",
+    "Source/DSP/RoutingEngine.cpp uses a 20 ms dedicated bypass ramp that is a separate member from the 30 ms routing crossfade ramp",
+    "The topologies, wet normalization N = sqrt(max(1, l_A*l_A + l_B*l_B)), and Insert/Send mixing from task f.1 remain present and unmodified in behavior",
+    "The RoutingEngine block process function contains no new/delete, malloc, buffer resize, juce::String construction, or lock acquisition, and does not clear large delay buffers inline",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpace_VST3 -j 4 succeeds",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/RoutingEngine.h",
+    "Source/DSP/RoutingEngine.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/FeedbackController.h, Source/DSP/FeedbackController.cpp, Source/DSP/SafetyProcessor.h, or Source/DSP/SafetyProcessor.cpp",
+    "modify Source/DSP/DelayVoice.h, Source/DSP/DelayVoice.cpp, Source/PluginProcessor.h, or Source/PluginProcessor.cpp",
+    "remove or rewrite the topology, normalization, or mixing behavior implemented by task f.1",
+    "merge the 20 ms bypass ramp and the 30 ms routing crossfade into one transition engine",
+    "attenuate or alter the dry path during trails bypass",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "RoutingEngine::BypassMode",
+    "RoutingEngine::setBypassMode",
+    "RoutingEngine::delayInputGain",
+    "RoutingEngine::consumeTailClearRequest"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the internal bypass ramp representation and member names",
+      "choose whether the bypass ramp is per-sample or per-block interpolated, provided it is click-free"
+    ],
+    "forbidden": [
+      "introduce a new transition or automation abstraction",
+      "change the RoutingEngine process signature established by f.1 in a way that breaks existing callers",
+      "clear delay buffers from inside RoutingEngine",
+      "defer click-free behavior to the integration task"
+    ]
+  },
+  "dependencies": [
+    "f.2",
+    "f.1"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

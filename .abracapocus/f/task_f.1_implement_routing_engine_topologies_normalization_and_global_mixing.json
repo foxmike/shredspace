@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "task_id": "f.1",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Implement routing engine topologies normalization and global mixing",
+  "description": "Create/complete Source/DSP/RoutingEngine.h and Source/DSP/RoutingEngine.cpp so the engine implements the three static voice topologies, wet voice normalization, and global mixing. No bypass logic in this task (f.4 owns it).\n\nBefore editing, inspect:\n- Source/DSP/DelayVoice.h (voice output contract, block processing signature, channel count)\n- Source/DSP/FeedbackController.h (existing feedback surface; do NOT edit it here)\n- Source/PluginProcessor.h (how DSP modules are owned and prepared; do NOT edit it here)\n- CMakeLists.txt (existing Source/DSP source list; do NOT edit it here, f.6 owns CMakeLists.txt registration)\n\nRequired behavior, restated so no external document is needed:\n- Topology Parallel: both voices receive the dry input. Voice contributions are combined as wet = (l_A*z_A + l_B*z_B) / N with normalization N = sqrt(max(1, l_A^2 + l_B^2)), where l_A and l_B are the per-voice linear levels and z_A, z_B are the per-voice wet outputs.\n- Topology A-into-B: input_B = cos(pi*cascade/2)*dry + sin(pi*cascade/2)*out_A, with cascade in [0,1]. Voice A still receives dry.\n- Topology B-into-A: the mirrored form, input_A = cos(pi*cascade/2)*dry + sin(pi*cascade/2)*out_B.\n- A bidirectional cascade (A into B and B into A simultaneously) is forbidden and must be structurally impossible; the topology is a single enum-selected state.\n- Routing topology changes are applied under a 30 ms equal-power crossfade of the wet path only (dry is untouched by the crossfade). Use a dedicated transition engine member (a ramp counter plus fade coefficients), never an ordinary juce::SmoothedValue, for the topology change itself.\n- Global mixing modes: Insert uses dryGain = cos(pi*m/2), wetGain = sin(pi*m/2) for mix m in [0,1]; Send outputs the wet path only (dryGain = 0, wetGain = 1).\n- Mix m, cascade, and l_A/l_B are smoothed with linear juce::SmoothedValue: Mix 20 ms, normalized expert controls 30 ms.\n\nReal-time rules that are binding for the .cpp: allocate every maximum-size buffer (crossfade scratch buffers, per-voice staging buffers) in prepare(); inside the per-block process function perform no heap allocation, no locks, no file IO, no string construction, no GUI calls, no buffer resizing, and no unbounded loops. Denormal protection is the caller's ScopedNoDenormals; do not add your own allocation-based guard.\n\nProvide at minimum: RoutingEngine::prepare(double sampleRate, int maxBlockSize, int numChannels), RoutingEngine::reset(), RoutingEngine::setTopology(Topology), RoutingEngine::setCascade(float), RoutingEngine::setVoiceLevels(float, float), RoutingEngine::setMixMode(MixMode), RoutingEngine::setMix(float), and a process entry point that takes the dry buffer and both voice wet buffers and writes the mixed output.",
+  "acceptance_criteria": [
+    "Source/DSP/RoutingEngine.h declares a RoutingEngine class with prepare, reset, setTopology, setCascade, setVoiceLevels, setMixMode, setMix, and a block process entry point",
+    "Source/DSP/RoutingEngine.cpp implements Parallel, A-into-B, and B-into-A topologies and contains no code path that applies A-into-B and B-into-A simultaneously",
+    "Source/DSP/RoutingEngine.cpp implements wet normalization N = sqrt(max(1, l_A*l_A + l_B*l_B)) and cascade gains cos(pi*cascade/2) and sin(pi*cascade/2)",
+    "Source/DSP/RoutingEngine.cpp implements Insert mixing with dryGain = cos(pi*m/2) and wetGain = sin(pi*m/2), and Send mixing as wet only",
+    "Source/DSP/RoutingEngine.cpp applies topology changes through a dedicated 30 ms wet-path crossfade ramp, not through juce::SmoothedValue",
+    "The RoutingEngine block process function contains no new/delete, no malloc, no std::vector or juce buffer resize, no juce::String construction, and no lock acquisition",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpace_VST3 -j 4 succeeds",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/RoutingEngine.h",
+    "Source/DSP/RoutingEngine.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify Source/DSP/FeedbackController.h or Source/DSP/FeedbackController.cpp",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "implement bypass, Hold, or safety logic in this task",
+    "add any new third-party dependency",
+    "allocate memory, lock, construct strings, or perform IO inside the block process function",
+    "use Catch2, GoogleTest, or any non-juce::UnitTest test framework"
+  ],
+  "allowed_symbols": [
+    "RoutingEngine",
+    "RoutingEngine::Topology",
+    "RoutingEngine::MixMode",
+    "RoutingEngine::prepare",
+    "RoutingEngine::reset",
+    "RoutingEngine::setTopology",
+    "RoutingEngine::setCascade",
+    "RoutingEngine::setVoiceLevels",
+    "RoutingEngine::setMixMode",
+    "RoutingEngine::setMix",
+    "RoutingEngine::process"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose internal member layout and scratch buffer names",
+      "choose the enum spelling for Topology and MixMode",
+      "choose the internal crossfade ramp representation"
+    ],
+    "forbidden": [
+      "introduce a new DSP framework or abstraction layer",
+      "change the DelayVoice or FeedbackController public interface",
+      "replace the specified normalization or mixing equations with alternatives",
+      "defer stability or normalization behavior to a later phase"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

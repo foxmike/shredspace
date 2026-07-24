@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "task_id": "f.9",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Create static end to end signal path tests",
+  "description": "Create tests/StaticSignalPathTests.cpp using the built-in juce::UnitTest framework and register it in CMakeLists.txt on the existing console test-runner target. This is the final serialized CMakeLists.txt write of the phase and the phase's closing verification task.\n\nBefore editing, inspect:\n- Source/PluginProcessor.h and .cpp (the integrated processBlock and isBusesLayoutSupported from f.6)\n- Source/DSP/FeedbackController.h (cross-feedback surface from f.2)\n- tests/RoutingBypassTests.cpp and tests/SafetyHoldTests.cpp (the juce::UnitTest idiom already established)\n- CMakeLists.txt (the console test-runner target and its target_sources list)\n\nRequired test coverage:\n- Cross-feedback channel movement and stability at q = 0, q = 0.5, and q = 1. Assert q = 0 keeps a left-only impulse confined to the left channel, q = 0.5 produces equal energy in both channels after one repeat, and q = 1 moves energy to the opposite channel on each repeat (ping-pong). For all three, run a long bounded decay at maximum feedback and assert the output magnitude never exceeds a fixed bound and never grows over time.\n- Bus layouts: mono-mono produces finite bounded output; mono-stereo produces valid deterministic stereo output with the dry component centered (left and right dry contributions equal within a stated tolerance) and no uninitialized channel content; stereo-stereo processes both channels.\n- End-to-end impulse through the complete path: input gain, both voices, routing, stereo processing, safety, global mix, output gain \u2014 asserting a finite, non-silent, bounded response with repeats appearing at the expected delay positions.\n- Zero tail: with the decay/tail control at zero, assert the wet path produces no sustained output.\n\nUse only juce::UnitTest. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new dependency may be introduced. Tests must be deterministic: fixed sample rates (48000 Hz and 44100 Hz), fixed block sizes, fixed generated signals, and no wall-clock dependence.\n\nIn CMakeLists.txt, add only tests/StaticSignalPathTests.cpp to the existing test-runner target sources.",
+  "acceptance_criteria": [
+    "tests/StaticSignalPathTests.cpp exists and defines juce::UnitTest subclasses with static instances, using no third-party test framework",
+    "tests/StaticSignalPathTests.cpp asserts cross-feedback channel movement at q = 0, q = 0.5, and q = 1 and bounded non-growing output at maximum feedback for each",
+    "tests/StaticSignalPathTests.cpp exercises mono-mono, mono-stereo, and stereo-stereo bus layouts through the processor",
+    "tests/StaticSignalPathTests.cpp asserts the mono-stereo dry component is centered, with left and right dry contributions equal within a stated tolerance, and that no output channel is left uninitialized",
+    "tests/StaticSignalPathTests.cpp asserts an end-to-end impulse response is finite, non-silent, bounded, and shows repeats at the expected delay positions",
+    "tests/StaticSignalPathTests.cpp asserts the wet path produces no sustained output when the tail control is zero",
+    "CMakeLists.txt adds tests/StaticSignalPathTests.cpp to the existing console test-runner target and adds no new dependency",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpaceTests ShredSpace_VST3 ShredSpace_LV2 ShredSpace_Standalone -j 4 succeeds",
+    "ctest --test-dir build --output-on-failure passes",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/StaticSignalPathTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify any file under Source/",
+    "modify tests/RoutingBypassTests.cpp or tests/SafetyHoldTests.cpp",
+    "modify CMakePresets.json",
+    "use Catch2, GoogleTest, doctest, or any non-juce::UnitTest framework",
+    "add FetchContent, find_package, or any new third-party dependency",
+    "change the plugin target's source list in CMakeLists.txt",
+    "weaken production behavior to make a test pass",
+    "write tests that depend on wall-clock timing or random seeds"
+  ],
+  "allowed_symbols": [
+    "CrossFeedbackStabilityTests",
+    "BusLayoutTests",
+    "EndToEndSignalPathTests"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose tolerances, run lengths, and amplitude bounds, stating them explicitly in the test source",
+      "choose the fixed block sizes and impulse amplitudes used in the tests"
+    ],
+    "forbidden": [
+      "introduce a test helper or analysis library",
+      "change any production interface to make testing easier",
+      "skip a required layout or q value"
+    ]
+  },
+  "dependencies": [
+    "f.8"
+  ],
+  "task_timeout_seconds": 2400,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

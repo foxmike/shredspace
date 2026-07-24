@@ -1,0 +1,72 @@
+{
+  "verification": {
+    "checks": [
+      {
+        "name": "cmake_configure",
+        "command": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "build",
+          "-DCMAKE_BUILD_TYPE=Debug"
+        ]
+      },
+      {
+        "name": "build_standalone",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "--target",
+          "ShredSpace_Standalone",
+          "-j",
+          "4"
+        ]
+      },
+      {
+        "name": "build_vst3",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "--target",
+          "ShredSpace_VST3",
+          "-j",
+          "4"
+        ]
+      },
+      {
+        "name": "build_tests",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "--target",
+          "ShredSpaceTests",
+          "-j",
+          "4"
+        ]
+      },
+      {
+        "name": "ctest_profile_macro_scene",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build",
+          "--output-on-failure",
+          "-R",
+          "ProfileMacroScene"
+        ]
+      },
+      {
+        "name": "profile_json_valid",
+        "command": [
+          "python3",
+          "-c",
+          "import json,glob; [json.load(open(p)) for p in glob.glob('Resources/Profiles/*.json')]"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "task_id": "e.4",
+  "phase": "E",
+  "phase_id": "e",
+  "title": "Implement stereo processor with pan width lf mono and correlation",
+  "description": "Create Source/DSP/StereoProcessor.h and Source/DSP/StereoProcessor.cpp implementing wet-path stereo placement, width, low-frequency mono, and correlation telemetry for ShredSpace.\n\nBefore editing, inspect:\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp and, if present, Source/DSP/RoutingEngine.h (to see how wet channels are produced and where stereo shaping is applied)\n- Any existing Source/DSP/*.h module and match its namespace, pragma-once/header-guard style, include style, and naming conventions exactly\n- CMakeLists.txt (C++20 standard, JUCE modules available) but do not edit it\n\nRequired behavior (implement exactly these equations):\n1. Constant-power pan for p in [-1, 1]: gain_L = cos(pi*(p+1)/4), gain_R = sin(pi*(p+1)/4). Clamp p to [-1, 1].\n2. Mid/side width for w in [0, 2]: M = (L + R)/sqrt(2), S = (L - R)/sqrt(2), L_out = (M + w*S)/sqrt(2), R_out = (M - w*S)/sqrt(2). At w = 1 this is an exact identity round-trip (L_out == L, R_out == R within floating-point tolerance). Clamp w to [0, 2].\n3. Low-frequency mono: split each wet channel at a crossover frequency in the range 60-500 Hz, default 180 Hz. Form M_low = (L_low + R_low)/2 and output M_low summed with each channel's high band, so content below the crossover collapses to mono while content above it retains its stereo image. Use a complementary first-order or Linkwitz-Riley style split built from JUCE DSP filters already available in the project; do not introduce a new dependency. The dry path is unaffected: this class operates on wet channels only.\n4. Correlation telemetry: accumulate smoothed sumLR, sumL2, sumR2 and compute correlation = sumLR / sqrt(sumL2*sumR2 + epsilon), clamped to [-1, 1]. Publish it as a scalar via std::atomic<float> for display only; never construct strings or touch GUI objects from the audio thread.\n\nAPI shape: a class StereoProcessor with prepare(double sampleRate, int maxBlockSize), reset(), setPan(float p), setWidth(float w), setLowFrequencyMonoCrossover(float hz), setLowFrequencyMonoEnabled(bool), a stereo block process function, and getCorrelation() returning the atomic telemetry value.\n\nSmoothing by domain (binding): pan uses linear juce::SmoothedValue at 30 ms; width uses linear juce::SmoothedValue at 50 ms; the crossover frequency is strictly positive and uses multiplicative smoothing at 50 ms. Real-time rules: no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, or buffer resizing in the process path; all filter state and scratch storage allocated in prepare sized for the maximum block size.\n\nDo not modify DelayVoice, CMakeLists.txt, or any other file; integration and build registration happen in task e.5. No artist or song names may appear anywhere in the source.",
+  "acceptance_criteria": [
+    "Source/DSP/StereoProcessor.h and Source/DSP/StereoProcessor.cpp exist and declare/define a StereoProcessor class with prepare, reset, setPan, setWidth, crossover setters, a stereo process function, and getCorrelation",
+    "StereoProcessor.cpp implements constant-power pan gain_L = cos(pi*(p+1)/4) and gain_R = sin(pi*(p+1)/4) with p clamped to [-1,1]",
+    "StereoProcessor.cpp implements M=(L+R)/sqrt(2), S=(L-R)/sqrt(2), L_out=(M+w*S)/sqrt(2), R_out=(M-w*S)/sqrt(2) with w clamped to [0,2], and the w=1 case reproduces the input exactly within floating-point tolerance",
+    "Low-frequency mono splits each wet channel at a crossover clamped to [60, 500] Hz defaulting to 180 Hz, sums M_low=(L_low+R_low)/2 with the high bands, and leaves the dry path untouched",
+    "Correlation telemetry is computed as sumLR/sqrt(sumL2*sumR2 + epsilon), clamped to [-1,1], and published through a std::atomic<float>",
+    "Pan smooths linearly over 30 ms, width smooths linearly over 50 ms, and the crossover frequency uses multiplicative smoothing over 50 ms",
+    "No heap allocation, locking, file IO, or string construction occurs in StereoProcessor process-path functions; all state is allocated in prepare",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/StereoProcessor.h",
+    "Source/DSP/StereoProcessor.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/DSP/ModulationEngine.h, Source/DSP/ModulationEngine.cpp, Source/DSP/SoftSaturator.h, Source/DSP/SoftSaturator.cpp, Source/DSP/ShortDiffuser.h, or Source/DSP/ShortDiffuser.cpp",
+    "modify anything under JUCE/",
+    "add any new third-party dependency",
+    "apply width, pan, or low-frequency mono to the dry signal path",
+    "use multiplicative smoothing for pan or width, or linear smoothing for the crossover frequency",
+    "publish correlation telemetry through strings, shared_ptr, or GUI objects from the audio thread",
+    "allocate memory, lock, construct strings, or perform file IO inside process-path functions",
+    "include artist or song names in source or comments"
+  ],
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

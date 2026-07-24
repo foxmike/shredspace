@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "task_id": "g.6",
+  "phase": "G",
+  "phase_id": "g",
+  "title": "Implement adaptive controller with three modes and destination deltas",
+  "description": "Create Source/Analysis/AdaptiveController.h and Source/Analysis/AdaptiveController.cpp ONLY. This module fuses the analyzer outputs into contraction and bloom controls and computes the per-voice destination deltas consumed elsewhere in the plugin.\n\nBefore editing, inspect:\n- Source/Analysis/PerformanceAnalyzer.h (task g.2)\n- Source/Analysis/OnsetDetector.h (task g.3 \u2014 smoothedOnsetActivity)\n- Source/Analysis/DensityEstimator.h (task g.4 \u2014 density)\n- Source/Analysis/SustainEstimator.h (task g.5 \u2014 sustain and phraseGap)\n- CMakeLists.txt (read only; do NOT edit it)\n\nImplement class AdaptiveController with an enum class Mode { Off, Level, Articulation }, prepare(), reset(), setMode(Mode), process (float density, float smoothedOnsetActivity, float sustain, float phraseGap, float inputActivity, int numAnalysisSamples), and a getDeltasForVoice (float adaptiveRole, ...) style accessor returning a POD struct of destination deltas.\n\nFusion targets, exactly as specified and binding:\n- C_target = clamp(densityWeight*density + onsetWeight*smoothedOnsetActivity, 0.0f, 1.0f)\n- B_target = clamp(sustainWeight*sustain + gapWeight*phraseGap, 0.0f, 1.0f) * (1 - contraction)\nDEFINITION scales contraction (C) and BLOOM scales bloom (B); expose those two macro scalars as settable members. Each destination gets SEPARATE attack and release smoothing coefficients \u2014 never one shared envelope, and never a single SmoothedValue reused across destinations. Precompute every attack and release coefficient in prepare() from the fixed 48000 Hz analysis rate.\n\nThe three modes exactly:\n- Off: forces contraction = 0 and bloom = 0. Telemetry values may still be computed and published, but the audible effect must be exactly zero, i.e. sample-identical to the static path within floating-point determinism. Every returned delta must be exactly 0.0f and every effective value must equal its base value.\n- Level: traditional envelope-based wet ducking ONLY \u2014 driven by input activity with a fast envelope and a slow release, affecting wet level reduction and return exclusively. In this mode the controller must NOT use flux, density, sustain, gap, tail, tone, width, or softening; all deltas other than the wet dB delta must be exactly 0.0f.\n- Articulation: the full fusion engine described above with all destinations active.\n\nPer-voice destination deltas, weighted by adaptiveRole in [0,1], exactly as specified:\n- wet dB delta = -role*C*wetReduction_dB + role*B*wetLift_dB\n- T60_eff = T60_base * 2^(-role*C*tailReductionOct + role*B*tailExpansionOct); feedback is then recomputed as g = 10^(-3*T/T60_eff) and hard-capped at g_final = min(g_requested, 0.985f). Provide a helper that performs this recomputation and the 0.985 cap so callers cannot bypass it.\n- LPF_eff = LPF_base * 2^(-role*C*toneDarkeningOct + role*B*toneOpeningOct)\n- width_eff = clamp(width_base - role*C*widthReduction + role*B*widthExpansion, 0.0f, 2.0f)\n- softening_eff = clamp(softening_base + role*C*softeningIncrease, 0.0f, 1.0f)\n- diffusion_eff = clamp(diffusion_base + role*B*diffusionIncrease, 0.0f, 0.40f)\n\nLayering rules restated and binding: these are deltas combined into internal effective values only. This controller must NEVER call setValueNotifyingHost on any destination and must NEVER rewrite base APVTS values. It must not include or reference the APVTS at all. dB-domain quantities are smoothed in dB and converted to linear only afterwards via g = 10^(G_dB/20); octave-scaled quantities use the p_base * 2^(sum of octave deltas) form shown above.\n\nCross-thread rules restated and binding: any numeric data this controller publishes for the audio thread crosses via preallocated fixed-size POD buffers with an atomic active index and generation published with release semantics and read with acquire semantics; never std::atomic<std::shared_ptr>; no strings or metadata in any snapshot. Scalar telemetry uses plain atomics.\n\nReal-time rules restated and binding: no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, or buffer resizing inside process() or the delta accessors. Do not introduce any new third-party dependency.",
+  "acceptance_criteria": [
+    "Source/Analysis/AdaptiveController.h and Source/Analysis/AdaptiveController.cpp exist and define class AdaptiveController with an enum class Mode containing Off, Level, and Articulation",
+    "C_target is computed as clamp(densityWeight*density + onsetWeight*smoothedOnsetActivity, 0, 1) and B_target as clamp(sustainWeight*sustain + gapWeight*phraseGap, 0, 1) * (1 - contraction)",
+    "Each destination has its own attack and release smoothing coefficients precomputed in prepare from the fixed 48000 Hz analysis rate, with no single shared envelope reused across destinations",
+    "Mode Off returns exactly zero for every destination delta so the adaptive path is sample-identical to the static path within floating-point determinism",
+    "Mode Level produces only a wet level delta and returns exactly zero for tail, tone, width, softening, and diffusion deltas, and reads no flux, density, sustain, or gap input",
+    "Per-voice deltas implement wet dB delta = -role*C*wetReduction_dB + role*B*wetLift_dB, T60_eff = T60_base * 2^(-role*C*tailReductionOct + role*B*tailExpansionOct), LPF_eff = LPF_base * 2^(-role*C*toneDarkeningOct + role*B*toneOpeningOct), width_eff clamped to [0,2], softening_eff clamped to [0,1], and diffusion_eff clamped to [0,0.40]",
+    "Feedback recomputation uses g = 10^(-3*T/T60_eff) and is hard-capped at min(g_requested, 0.985)",
+    "AdaptiveController.cpp contains no call to setValueNotifyingHost, no reference to AudioProcessorValueTreeState, and no std::atomic<std::shared_ptr>",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_dsp=1 Source/Analysis/AdaptiveController.cpp succeeds",
+    "AdaptiveController::process contains no call to new, malloc, resize, setSize, or any locking primitive",
+    "No file outside Source/Analysis/AdaptiveController.h and Source/Analysis/AdaptiveController.cpp is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Analysis/AdaptiveController.h",
+    "Source/Analysis/AdaptiveController.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any other file under Source/Analysis/",
+    "modify CMakeLists.txt",
+    "modify anything under JUCE/",
+    "modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, or any ParameterLayout file",
+    "call setValueNotifyingHost or write base APVTS values",
+    "use std::atomic<std::shared_ptr> or place strings in an audio-thread snapshot",
+    "share one smoothing envelope across multiple destinations",
+    "allow Off mode to produce any non-zero delta",
+    "allow Level mode to read flux, density, sustain, gap, tail, tone, width, or softening",
+    "bypass the 0.985 feedback cap",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "AdaptiveController",
+    "Mode",
+    "AdaptiveDeltas",
+    "prepare",
+    "reset",
+    "setMode",
+    "process",
+    "getDeltasForVoice",
+    "getContraction",
+    "getBloom",
+    "computeCappedFeedback",
+    "setDefinition",
+    "setBloomAmount",
+    "setFusionWeights"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the POD struct field names for the returned deltas",
+      "choose private member names and per-destination smoother storage layout",
+      "choose default values for the wetReduction_dB, wetLift_dB, octave, width, softening, and diffusion depth constants and document them in comments"
+    ],
+    "forbidden": [
+      "change the specified fusion, delta, or feedback equations",
+      "introduce a new third-party dependency",
+      "reach into the APVTS or the GUI from this class",
+      "add a fourth adaptive mode or rename the three specified modes"
+    ]
+  },
+  "dependencies": [
+    "g.3",
+    "g.4",
+    "g.5"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

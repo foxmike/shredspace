@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "task_id": "f.5",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Implement hold preservation loop bypassing tone chain",
+  "description": "Add the dedicated Hold preservation path to Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp. DelayVoice is owned only by this task in this phase.\n\nBefore editing, inspect:\n- Source/DSP/DelayVoice.h and .cpp (the existing repeat loop and its stage order)\n- Source/DSP/SafetyProcessor.h as produced by f.3 (ceiling application, NaN/Inf rejection, DC blocker; read only)\n- Source/DSP/FeedbackController.h as produced by f.2 (read only)\n\nRequired behavior, restated so no external document is needed:\n- The normal repeat-loop order inside each voice's feedback loop is exactly: fractional delay read, HPF, LPF, Presence Guard, repeat transient softener, mild saturation, restricted diffusion, feedback tap. Do not reorder it.\n- On Hold engage: new delay input goes to zero, and the loop crossfades over 30 ms equal-power into a dedicated Hold path.\n- The Hold path bypasses HPF, LPF, Presence Guard, transient softening, saturation, and diffusion. This is a product behavior (freeze without progressive dulling), not an optimization, and must not be simplified into \"reuse the normal loop with neutral settings\".\n- The Hold path retains: fractional delay read, routing, stereo channel exchange, DC blocker, NaN and infinity rejection, the hard 0.985 ceiling, and emergency safety handling.\n- g_hold = 0.985, giving a long-decaying freeze whose tail does not progressively darken.\n- Hold release is click-free and uses the same 30 ms equal-power crossfade back to the normal loop.\n- Delay read positions remain clamped to [8 samples, 8.25 seconds] in both the normal and Hold paths.\n\nReal-time rules that are binding: all maximum-size buffers are allocated in prepareToPlay/prepare; the per-block and per-sample paths perform no heap allocation, locks, IO, string construction, GUI calls, buffer resizing, or unbounded loops, and destroy no heap-owned objects.\n\nProvide at minimum: DelayVoice::setHold(bool) and internal hold crossfade state. Do not add parameters or APVTS wiring here.",
+  "acceptance_criteria": [
+    "Source/DSP/DelayVoice.h declares a Hold engage/release setter and internal hold crossfade state",
+    "Source/DSP/DelayVoice.cpp implements a dedicated Hold path that does not call the HPF, LPF, Presence Guard, transient softener, saturation, or diffusion stages",
+    "Source/DSP/DelayVoice.cpp retains fractional delay read, DC blocking, NaN and infinity rejection, and the 0.985 ceiling inside the Hold path",
+    "Source/DSP/DelayVoice.cpp zeroes new delay input while Hold is engaged and uses g_hold = 0.985",
+    "Source/DSP/DelayVoice.cpp implements a 30 ms equal-power crossfade for both Hold engage and Hold release",
+    "The normal repeat-loop stage order fractional delay read, HPF, LPF, Presence Guard, transient softener, saturation, diffusion, feedback tap is unchanged",
+    "Delay read positions are clamped to a minimum of 8 samples and a maximum of 8.25 seconds in both the normal and Hold paths",
+    "The DelayVoice audio path contains no new/delete, malloc, buffer resize, juce::String construction, or lock acquisition",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpace_VST3 -j 4 succeeds",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/DelayVoice.h",
+    "Source/DSP/DelayVoice.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/RoutingEngine.h, Source/DSP/RoutingEngine.cpp, Source/DSP/SafetyProcessor.h, Source/DSP/SafetyProcessor.cpp, Source/DSP/FeedbackController.h, or Source/DSP/FeedbackController.cpp",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "implement Hold by reusing the normal tone chain with neutral coefficients",
+    "reorder or remove stages of the normal repeat loop",
+    "raise g_hold above 0.985 or bypass the ceiling during Hold",
+    "add any new third-party dependency",
+    "allocate memory or resize buffers in the audio path"
+  ],
+  "allowed_symbols": [
+    "DelayVoice::setHold",
+    "DelayVoice::isHoldEngaged",
+    "DelayVoice::processHoldPath"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose internal member names for hold crossfade state",
+      "choose whether the hold path is a separate private member function or an inlined branch, provided the tone stages are genuinely skipped"
+    ],
+    "forbidden": [
+      "introduce a new voice or loop abstraction",
+      "change the DelayVoice public process signature",
+      "add APVTS parameters or host-facing wiring",
+      "collapse the Hold path into the normal tone chain"
+    ]
+  },
+  "dependencies": [
+    "f.3"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

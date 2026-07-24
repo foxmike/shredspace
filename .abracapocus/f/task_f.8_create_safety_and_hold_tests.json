@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "f.8",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Create safety and hold tests",
+  "description": "Create tests/SafetyHoldTests.cpp using the built-in juce::UnitTest framework and register it in CMakeLists.txt on the existing console test-runner target. This is a serialized CMakeLists.txt write: it runs after f.7 and before f.9.\n\nBefore editing, inspect:\n- Source/DSP/SafetyProcessor.h (limiter enable, ceiling application, intervention flag, buffer-clear request)\n- Source/DSP/DelayVoice.h (Hold engage/release surface)\n- tests/RoutingBypassTests.cpp (the juce::UnitTest idiom established by f.7)\n- CMakeLists.txt (the console test-runner target and its target_sources list)\n\nRequired test coverage \u2014 stimuli: impulses, full-scale tones, silence, denormal-range values (magnitudes near 1e-30), NaN, infinity, maximum feedback, and DC. For every stimulus assert: no NaN or infinity in the output, no runaway amplitude growth over a bounded run, the test completes within a bounded sample count (no hang), and the atomic safety-intervention flag is published when an invalid state was injected.\n\nAdditional required assertions:\n- With the optional RMS limiter disabled, the mandatory layer is still active: the 0.985 feedback ceiling still applies, NaN and infinity are still rejected, and the DC blocker still removes a constant offset.\n- With the limiter enabled, sustained input above the 0.90 linear threshold produces a feedback gain reduction consistent with reduction = min(1, 0.90/(energy+epsilon)) and g_safe = min(0.985, g_requested*reduction).\n- Hold kills new delay input: feed a burst, engage Hold, feed further input, and assert the held tail contains no contribution from the post-engage input.\n- Hold bypasses tone processing so the held tail stays spectrally stable: compare a coarse spectral measure (for example high-band to low-band energy ratio via band-limited RMS) at the start and after several seconds of held repeats and assert it stays within a stated tolerance, demonstrating no progressive darkening.\n- Hold gain caps at 0.985 and Hold release is click-free against an explicit sample-delta threshold across the 30 ms crossfade.\n\nNaN and infinity injection occurs only inside this test file; production code must not be modified to enable it.\n\nUse only juce::UnitTest. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new dependency may be introduced. Tests must be deterministic: fixed sample rates, fixed block sizes, fixed generated signals, no wall-clock dependence.\n\nIn CMakeLists.txt, add only tests/SafetyHoldTests.cpp to the existing test-runner target sources.",
+  "acceptance_criteria": [
+    "tests/SafetyHoldTests.cpp exists and defines juce::UnitTest subclasses with static instances, using no third-party test framework",
+    "tests/SafetyHoldTests.cpp exercises impulses, full-scale tones, silence, denormal-range values, NaN, infinity, maximum feedback, and DC, asserting finite bounded output and no hang for each",
+    "tests/SafetyHoldTests.cpp asserts the atomic safety-intervention flag is published after invalid-state injection",
+    "tests/SafetyHoldTests.cpp asserts that with the RMS limiter disabled the 0.985 ceiling, NaN and infinity rejection, and the DC blocker remain active",
+    "tests/SafetyHoldTests.cpp asserts limiter reduction consistent with reduction = min(1, 0.90/(energy+epsilon)) and g_safe = min(0.985, g_requested*reduction) within a stated tolerance",
+    "tests/SafetyHoldTests.cpp asserts Hold admits no post-engage delay input and that Hold gain does not exceed 0.985",
+    "tests/SafetyHoldTests.cpp asserts a band-energy ratio of the held tail stays within a stated tolerance over several seconds of repeats, demonstrating no progressive darkening",
+    "tests/SafetyHoldTests.cpp asserts Hold release is click-free across the 30 ms crossfade against an explicit sample-delta threshold",
+    "CMakeLists.txt adds tests/SafetyHoldTests.cpp to the existing console test-runner target and adds no new dependency",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpaceTests -j 4 succeeds",
+    "ctest --test-dir build --output-on-failure passes",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/SafetyHoldTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify any file under Source/",
+    "modify tests/RoutingBypassTests.cpp or other existing test files",
+    "modify CMakePresets.json",
+    "use Catch2, GoogleTest, doctest, or any non-juce::UnitTest framework",
+    "add FetchContent, find_package, or any new third-party dependency",
+    "change the plugin target's source list in CMakeLists.txt",
+    "inject NaN or infinity from production code rather than from the test file",
+    "weaken production behavior to make a test pass"
+  ],
+  "allowed_symbols": [
+    "MandatorySafetyTests",
+    "SafetyLimiterTests",
+    "HoldPathTests"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the coarse spectral measure and its band split, stating both in the test source",
+      "choose tolerances, run lengths, and click thresholds, stating them explicitly"
+    ],
+    "forbidden": [
+      "introduce an FFT or analysis third-party library",
+      "change any production interface to make testing easier",
+      "skip a required stimulus or mark an assertion pending"
+    ]
+  },
+  "dependencies": [
+    "f.7"
+  ],
+  "task_timeout_seconds": 2400,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

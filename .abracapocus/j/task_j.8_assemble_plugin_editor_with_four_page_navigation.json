@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "task_id": "j.8",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Assemble plugin editor with four page navigation",
+  "description": "Rewrite Source/PluginEditor.h and Source/PluginEditor.cpp to assemble the four-page GUI, and register all new GUI and Telemetry sources in CMakeLists.txt. This task is the sole owner of PluginEditor.* and CMakeLists.txt in phase j.\n\nEditor requirements:\n- `class ShredSpaceAudioProcessorEditor : public juce::AudioProcessorEditor` (keep the existing class name found in the file) holding a single `CustomLookAndFeel` instance, applied via `setLookAndFeel(&lookAndFeel)` in the constructor and cleared with `setLookAndFeel(nullptr)` in the destructor \u2014 the destructor call is mandatory to avoid a dangling LookAndFeel pointer.\n- Owned page instances: PerformancePage, VoicesPage, ToneMotionPage, IntelligencePage, each `std::unique_ptr` and only one visible at a time.\n- A navigation bar of four `juce::TextButton` tabs (Performance, Voices, Tone & Motion, Intelligence) that switch the visible page via `setVisible`.\n- `setResizable(true, true)` with a sensible minimum size via `setResizeLimits`, an initial `setSize`, and a `resized()` that lays out the nav bar and gives the remaining bounds to the active page. No hard-coded absolute child positions that break on resize.\n- The editor performs no audio processing and reads audio-derived data only through the processor's TelemetryState accessor.\n\nCMakeLists.txt: add Source/Telemetry/TelemetryState.cpp, Source/GUI/CustomLookAndFeel.cpp, Source/GUI/MeterComponent.cpp, Source/GUI/PerformancePage.cpp, Source/GUI/VoicesPage.cpp, Source/GUI/ToneMotionPage.cpp, Source/GUI/IntelligencePage.cpp, and Source/GUI/DetectorDisplay.cpp to the existing plugin target's sources using the existing `target_sources` pattern. Do not change the product identity values (ShredSpace, nSpace Systems, 1.0.0, NSPC, ShSp, com.nspacesystems.shredspace, urn:nspacesystems:plugin:shredspace), the target list, the JUCE submodule reference, or the presets. Do not add any third-party dependency.\n\nBefore editing, inspect:\n- CMakeLists.txt (existing target name, target_sources block, juce_add_plugin arguments)\n- Source/PluginEditor.h and Source/PluginEditor.cpp (existing class name and constructor signature)\n- Source/GUI/PerformancePage.h, VoicesPage.h, ToneMotionPage.h, IntelligencePage.h (constructor signatures produced by j.4\u2013j.7)\n- Source/GUI/CustomLookAndFeel.h and Source/PluginProcessor.h\n\nAfter editing, build and confirm the Linux VST3, LV2, and Standalone targets compile and link.",
+  "acceptance_criteria": [
+    "Source/PluginEditor.h declares owned std::unique_ptr members for PerformancePage, VoicesPage, ToneMotionPage, and IntelligencePage and a CustomLookAndFeel member",
+    "Source/PluginEditor.cpp calls setLookAndFeel(&lookAndFeel) in the constructor and setLookAndFeel(nullptr) in the destructor",
+    "Source/PluginEditor.cpp creates four navigation buttons that switch exactly one visible page at a time and calls setResizable(true, true) with resize limits",
+    "Source/PluginEditor.cpp resized() lays out the navigation bar and assigns the remaining bounds to the active page",
+    "CMakeLists.txt lists Source/Telemetry/TelemetryState.cpp, Source/GUI/CustomLookAndFeel.cpp, Source/GUI/MeterComponent.cpp, Source/GUI/PerformancePage.cpp, Source/GUI/VoicesPage.cpp, Source/GUI/ToneMotionPage.cpp, Source/GUI/IntelligencePage.cpp, and Source/GUI/DetectorDisplay.cpp in the plugin target sources",
+    "CMakeLists.txt still declares product name ShredSpace, company nSpace Systems, version 1.0.0, manufacturer code NSPC, plugin code ShSp, bundle id com.nspacesystems.shredspace, and LV2 URI urn:nspacesystems:plugin:shredspace, with the VST3, LV2, and Standalone formats unchanged",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release succeeds",
+    "cmake --build build --parallel succeeds with the VST3, LV2, and Standalone targets linking",
+    "ctest --test-dir build --output-on-failure passes",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/PluginEditor.h",
+    "Source/PluginEditor.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/ or change the pinned submodule commit",
+    "modify CMakePresets.json",
+    "modify Source/PluginProcessor.*, Source/Telemetry/*, or any file under Source/GUI",
+    "change product identity values, target/format list, or C++ standard in CMakeLists.txt",
+    "add new third-party dependencies or any test framework other than juce::UnitTest",
+    "perform audio processing in the editor or read audio buffers outside TelemetryState",
+    "omit setLookAndFeel(nullptr) in the editor destructor"
+  ],
+  "allowed_symbols": [
+    "ShredSpaceAudioProcessorEditor",
+    "resized",
+    "paint",
+    "showPage"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose default editor size, resize limits, and nav bar height",
+      "choose the page-switching helper implementation"
+    ],
+    "forbidden": [
+      "restructure the CMake target or add new targets",
+      "change plugin metadata or supported formats",
+      "modify page or telemetry class interfaces"
+    ]
+  },
+  "dependencies": [
+    "j.4",
+    "j.5",
+    "j.6",
+    "j.7"
+  ],
+  "task_timeout_seconds": 2700,
+  "verification_commands": []
+}

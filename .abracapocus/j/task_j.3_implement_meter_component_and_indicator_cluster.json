@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "task_id": "j.3",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Implement meter component and indicator cluster",
+  "description": "Create Source/GUI/MeterComponent.h and Source/GUI/MeterComponent.cpp implementing `class MeterComponent : public juce::Component, private juce::Timer`.\n\nResponsibilities:\n- Stereo output meters driven by TelemetryState leftPeak/rightPeak with an RMS underlay from leftRms/rightRms. Display in dB with a floor of -60 dB, converting from linear with `dB = 20 * std::log10(std::max(level, 1.0e-6f))`.\n- Ballistics on the GUI side only: instantaneous rise, exponential decay per timer tick, and a peak-hold marker that resets after 1500 ms.\n- An indicator cluster reading activity, density, contraction, bloom, and the safety flag, each rendered as a labelled bar or lamp using colours from CustomLookAndFeel.\n- `startTimerHz(30)` in the constructor, `stopTimer()` handled by the Timer destructor; each `timerCallback()` reads TelemetryState atomics and calls `repaint()`.\n\nThe component takes a `TelemetryState&` by reference in its constructor and stores the reference. It must never poll audio buffers, never include a DSP header, and never block.\n\nBefore editing, inspect:\n- Source/Telemetry/TelemetryState.h (exact accessor names and types created in j.2)\n- Source/GUI/CustomLookAndFeel.h (shared colour constants created in j.1)\n- JUCE/modules/juce_events/timers/juce_Timer.h and JUCE/modules/juce_gui_basics/components/juce_Component.h (vendored signatures for timerCallback, paint, resized)\n\nDo not register this file in CMakeLists.txt; task j.8 owns that registration.",
+  "acceptance_criteria": [
+    "Source/GUI/MeterComponent.h declares class MeterComponent deriving from juce::Component and juce::Timer and taking a TelemetryState& constructor argument",
+    "Source/GUI/MeterComponent.cpp defines paint, resized, and timerCallback and calls startTimerHz in the constructor",
+    "timerCallback in Source/GUI/MeterComponent.cpp reads only TelemetryState accessors and calls repaint, performing no audio processing",
+    "Source/GUI/MeterComponent.cpp converts linear level to dB with a -60 dB display floor",
+    "Source/GUI/MeterComponent.h and .cpp include Source/Telemetry/TelemetryState.h and Source/GUI/CustomLookAndFeel.h and include no header from Source/DSP",
+    "Source/GUI/MeterComponent.cpp renders indicators for activity, density, contraction, bloom, and the safety flag",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/GUI/MeterComponent.h",
+    "Source/GUI/MeterComponent.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/Telemetry/TelemetryState.h or .cpp",
+    "modify Source/GUI/CustomLookAndFeel.h or .cpp",
+    "modify Source/PluginProcessor.* or Source/PluginEditor.*",
+    "include any DSP header or read audio buffers from the GUI",
+    "add new third-party dependencies"
+  ],
+  "allowed_symbols": [
+    "MeterComponent",
+    "timerCallback",
+    "paint",
+    "resized"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose meter decay constant, timer rate, and peak-hold duration",
+      "choose bar versus lamp rendering for each indicator"
+    ],
+    "forbidden": [
+      "add a second telemetry channel or new atomics",
+      "perform DSP analysis in the GUI",
+      "introduce a new drawing library"
+    ]
+  },
+  "dependencies": [
+    "j.1",
+    "j.2"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

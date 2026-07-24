@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "task_id": "i.7",
+  "phase": "I",
+  "phase_id": "i",
+  "title": "Create profile macro and scene tests",
+  "description": "Create tests/ProfileMacroSceneTests.cpp and register it in CMakeLists.txt. This task is the serialized owner of CMakeLists.txt for the final wave of phase i.\n\nBefore editing, inspect:\n- tests/ for the existing juce::UnitTest console-runner target and how earlier phase test files are registered in CMakeLists.txt; follow that exact pattern.\n- Source/Profiles/ProfileSchema.h, ProfileManager.h, ProfileSnapshot.h, Source/Profiles/SceneManager.h, and Source/Parameters/MacroEngine.h for the interfaces under test.\n- Resources/Profiles/*.json for the twelve bundled profiles.\nUse the built-in juce::UnitTest framework only. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new dependency may be added.\n\nWrite tests covering exactly these claims:\n1. All twelve bundled profiles parse and validate with ok == true.\n2. Every parameter ID referenced by every bundled profile exists in the frozen parameter layout.\n3. A profile whose schema_version is 0 or kCurrentSchemaVersion + 1 is rejected.\n4. Malformed profiles (non-object root, non-numeric delta, curve <= 0, three scenes, seven macros) fail safely: ok == false, non-empty errors, default document, no throw.\n5. An unknown parameter ID follows the migration rule: dropped, migration note recorded, document still ok.\n6. Profile loading performs no audio-thread IO: assert that ProfileManager exposes no processBlock-callable entry point by testing that a full load completes with the handoff generation unchanged until an explicit publish, and that acquire() on ProfileSnapshotHandoff returns a valid POD reference without any load having been triggered from it.\n7. No artist, band, or song name appears in any shipped resource: scan the embedded BinaryData profile blobs for a denylist of name-shaped tokens and assert none are present, and assert every profile_name, description, and tag is present and non-empty.\n8. Macro sweep: for each bundled profile and each of the eight macros, sweep u from 0.0 to 1.0 in 101 steps and assert every resulting effective destination value stays within that destination parameter's declared [min, max].\n9. Macro movement does not rewrite destination APVTS values: capture every APVTS base value before the sweep and assert each is bit-identical afterwards.\n10. Curve and endpoint mapping: assert delta(u=0) == deltaMin, delta(u=1) == deltaMax within 1e-6, and that curve 2.0 yields delta(u=0.5) equal to deltaMin + 0.25 * (deltaMax - deltaMin) within 1e-6.\n11. Morph domains: assert a linear-domain destination at lambda = 0.5 equals the arithmetic mean of its endpoints within 1e-6, and that a strictly positive time/frequency destination at lambda = 0.5 equals std::sqrt(p_A * p_B) within 1e-5, proving logarithmic morphing rather than linear.\n12. Discrete parameters switch under the crossfade: assert a routing target takes only its two endpoint values across the morph and never an intermediate value, and that the switch occurs within the 30 ms crossfade window.\n13. Base macro values remain unchanged through scene morphs: capture the eight macro base APVTS values, run a full A-to-D morph, and assert every base value is bit-identical afterwards.\n\nIn CMakeLists.txt, add tests/ProfileMacroSceneTests.cpp to the existing test runner target's source list only. Change nothing else in CMakeLists.txt. Verify with cmake --build build --target ShredSpaceTests and ctest --test-dir build --output-on-failure -R ProfileMacroScene.",
+  "acceptance_criteria": [
+    "tests/ProfileMacroSceneTests.cpp exists and uses only juce::UnitTest, with no Catch2, GoogleTest, or other third-party framework include",
+    "CMakeLists.txt adds tests/ProfileMacroSceneTests.cpp to the existing test runner target and makes no other change",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug succeeds",
+    "cmake --build build --target ShredSpaceTests succeeds",
+    "ctest --test-dir build --output-on-failure -R ProfileMacroScene passes",
+    "A test asserts all twelve bundled profiles validate with ok == true and every referenced parameter ID exists in the frozen layout",
+    "A test asserts schema_version 0 and kCurrentSchemaVersion + 1 are rejected and that malformed profiles return ok == false with a default document and no throw",
+    "A test asserts an unknown parameter ID is dropped with a migration note while the document stays ok",
+    "A test sweeps u over 101 steps for all eight macros in all twelve profiles and asserts every effective destination value stays within its declared range",
+    "A test captures all destination APVTS base values before and after a full macro sweep and asserts they are bit-identical, proving macros never rewrite base values",
+    "A test asserts delta(0) == deltaMin and delta(1) == deltaMax within 1e-6 and that curve 2.0 gives delta(0.5) == deltaMin + 0.25 * (deltaMax - deltaMin) within 1e-6",
+    "A test asserts linear-domain midpoint equals the arithmetic mean within 1e-6 and positive time/frequency midpoint equals std::sqrt(p_A * p_B) within 1e-5",
+    "A test asserts the routing target takes only endpoint values across the morph and switches within the 30 ms crossfade window",
+    "A test asserts the eight macro base APVTS values are bit-identical after a full A-to-D scene morph",
+    "A test asserts no artist, band, or song name token appears in any embedded profile resource",
+    "No file outside this task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/ProfileMacroSceneTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under Source/",
+    "modify any file under Resources/",
+    "modify any existing file under tests/",
+    "modify anything under JUCE/ or change the JUCE submodule pin",
+    "modify CMakePresets.json",
+    "change plugin identity metadata, formats, or targets in CMakeLists.txt beyond adding the new test source file",
+    "add Catch2, GoogleTest, or any other third-party test framework",
+    "add any new third-party dependency",
+    "weaken or delete assertions to make a failing test pass",
+    "include artist, band, or song names anywhere"
+  ],
+  "allowed_symbols": [
+    "ProfileMacroSceneTests",
+    "juce::UnitTest",
+    "beginTest",
+    "expect",
+    "expectEquals",
+    "expectWithinAbsoluteError"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose test case names and internal fixture helpers",
+      "choose the denylist token set for the resource name scan",
+      "choose how to construct an isolated APVTS for the base-value invariance tests"
+    ],
+    "forbidden": [
+      "modify production code to make a test pass",
+      "introduce a new test framework or test runner target",
+      "relax the stated tolerances",
+      "skip any of the thirteen required test claims"
+    ]
+  },
+  "dependencies": [
+    "i.6"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

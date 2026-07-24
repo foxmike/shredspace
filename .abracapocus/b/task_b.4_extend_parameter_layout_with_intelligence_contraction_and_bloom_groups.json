@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "task_id": "b.4",
+  "phase": "B",
+  "phase_id": "b",
+  "title": "Extend parameter layout with intelligence contraction and bloom groups",
+  "description": "Modify Source/Parameters/ParameterLayout.cpp ONLY. Replace the empty placeholder definition of shredspace::addIntelligenceParameters with the complete INTEL detector, contraction, and bloom groups. This is a serialized same-file write: do not alter the GLOBAL/PERF/TIME/STEREO/SCENE helpers from b.2 or the voice helper from b.3, and do not touch the header.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterIDs.h (INTEL_* constants)\n- Source/Parameters/ParameterLayout.h (addIntelligenceParameters declaration)\n- Source/Parameters/ParameterLayout.cpp (construction style used by b.2 and b.3)\n\nEXACT PARAMETERS (all juce::AudioParameterFloat unless stated; transcribe literally):\n\nDetector:\n- INTEL_SENSITIVITY: 0.0 to 100.0 %, default 55.0\n- INTEL_INPUT_GATE: -80.0 to -20.0 dB, default -55.0, suffix \" dB\"\n- INTEL_DENSITY_WINDOW: 200.0 to 1000.0 ms, default 500.0, suffix \" ms\"\n- INTEL_DENSITY_START: 1.0 to 8.0 events/second, default 3.0, suffix \" ev/s\"\n- INTEL_DENSITY_FULL: 6.0 to 20.0 events/second, default 12.0, suffix \" ev/s\"\n- INTEL_SUSTAIN_START: 50.0 to 800.0 ms, default 180.0, suffix \" ms\"\n- INTEL_SUSTAIN_FULL: 150.0 to 2000.0 ms, default 650.0, suffix \" ms\"\n- INTEL_PHRASE_GAP: 20.0 to 500.0 ms, default 120.0, suffix \" ms\"\n\nContraction:\n- INTEL_CONTRACTION_ATTACK: 1.0 to 100.0 ms, default 8.0, skewForCentre around 15.0, suffix \" ms\"\n- INTEL_CONTRACTION_RELEASE: 20.0 to 1000.0 ms, default 220.0, skewForCentre around 250.0, suffix \" ms\"\n- INTEL_WET_REDUCTION: 0.0 to 18.0 dB, default 8.0, suffix \" dB\"\n- INTEL_TAIL_REDUCTION: 0.0 to 2.0 octaves, default 1.0, suffix \" oct\"\n- INTEL_TONE_DARKENING: 0.0 to 2.0 octaves, default 0.75, suffix \" oct\"\n- INTEL_WIDTH_REDUCTION: 0.0 to 100.0 %, default 35.0\n- INTEL_ATTACK_SOFTEN_INCREASE: 0.0 to 100.0 %, default 45.0\n\nBloom:\n- INTEL_BLOOM_RISE: 20.0 to 1500.0 ms, default 220.0, skewForCentre around 300.0, suffix \" ms\"\n- INTEL_BLOOM_HOLD: 0.0 to 2000.0 ms, default 350.0, suffix \" ms\"\n- INTEL_BLOOM_RELEASE: 50.0 to 3000.0 ms, default 800.0, skewForCentre around 700.0, suffix \" ms\"\n- INTEL_WET_LIFT: 0.0 to 12.0 dB, default 4.0, suffix \" dB\"\n- INTEL_TAIL_EXPANSION: 0.0 to 2.0 octaves, default 0.75, suffix \" oct\"\n- INTEL_TONE_OPENING: 0.0 to 1.0 octaves, default 0.35, suffix \" oct\"\n- INTEL_WIDTH_EXPANSION: 0.0 to 100.0 %, default 30.0\n- INTEL_DIFFUSION_INCREASE: 0.0 to 30.0 %, default 12.0\n\nShared:\n- INTEL_TRANSIENT_CROSSOVER: 1000.0 to 6000.0 Hz, default 2500.0, skewForCentre around 2500.0, suffix \" Hz\"\n\nThat is 23 parameters added by this task. Every ID must come from a shredspace::paramids constant. CRITICAL: these are the adaptive engine's TUNING parameters only. The engine's runtime internal state \u2014 running means and deviations, FFT history, onset timestamps, current activity/density/sustain/phrase-gap values, telemetry, safety intervention state \u2014 must NEVER be added to APVTS. No third-party dependency. No artist or song names.",
+  "acceptance_criteria": [
+    "Source/Parameters/ParameterLayout.cpp defines shredspace::addIntelligenceParameters with a non-empty body adding exactly 23 parameters",
+    "g++ -std=c++20 -fsyntax-only -I JUCE/modules -I Source -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_audio_processors=1 -DJUCE_STANDALONE_APPLICATION=0 Source/Parameters/ParameterLayout.cpp passes with no errors",
+    "Every intelligence parameter uses a shredspace::paramids INTEL_ constant rather than a raw string literal ID",
+    "The INTEL ranges and defaults in Source/Parameters/ParameterLayout.cpp are exactly the values listed in this task description",
+    "No APVTS parameter is added for detector running means, deviations, FFT history, onset timestamps, runtime density/sustain/phrase-gap values, telemetry, or safety intervention state",
+    "The helpers written by tasks b.2 and b.3 are left unmodified",
+    "No file outside Source/Parameters/ParameterLayout.cpp is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Parameters/ParameterLayout.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Parameters/ParameterLayout.h",
+    "modify Source/Parameters/ParameterIDs.h",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify anything under JUCE/",
+    "rewrite, reformat, or reorder the helpers written by tasks b.2 and b.3",
+    "add any adaptive-engine runtime state as an APVTS parameter",
+    "add any third-party dependency"
+  ],
+  "allowed_symbols": [
+    "shredspace::addIntelligenceParameters"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose skew and step details within the stated ranges",
+      "group the three INTEL sections with comments inside one function"
+    ],
+    "forbidden": [
+      "change any stated range or default",
+      "implement adaptive detector logic in this file",
+      "change the signature of addIntelligenceParameters"
+    ]
+  },
+  "dependencies": [
+    "b.3"
+  ],
+  "task_timeout_seconds": 2100,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

@@ -1,0 +1,73 @@
+{
+  "task_id": "d.4",
+  "schema_version": 1,
+  "phase": "D",
+  "phase_id": "d",
+  "title": "Integrate tone guard and softener into delay voice in binding order",
+  "description": "Wire RepeatToneProcessor, PresenceGuard, and RepeatTransientSoftener into Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp, and register the three new module source files in CMakeLists.txt.\n\nBefore editing, inspect:\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (existing per-sample feedback loop, prepare/reset signatures, delay line read/write, feedback tap)\n- Source/DSP/RepeatToneProcessor.h (from d.1: prepare, setHighPassFrequency, setLowPassFrequency, processHighPassSample, processLowPassSample, updateCoefficients)\n- Source/DSP/PresenceGuard.h (from d.2: prepare, processSample, updateCoefficients, setEffectiveMaxCutDb)\n- Source/DSP/RepeatTransientSoftener.h (from d.3: prepare, processSample, updateCoefficients, setAmountPercent)\n- CMakeLists.txt (the existing target_sources list for the plugin target and the test runner target)\n\nRequired integration \u2014 the repeat-loop order inside each voice's feedback loop is binding and must appear in exactly this order:\n1. fractional delay read\n2. HPF (RepeatToneProcessor::processHighPassSample)\n3. LPF (RepeatToneProcessor::processLowPassSample)\n4. Presence Guard (PresenceGuard::processSample)\n5. repeat transient softener (RepeatTransientSoftener::processSample)\n6. mild saturation \u2014 RESERVED SLOT for phase e: leave a clearly marked pass-through comment placeholder only, implement nothing\n7. restricted diffusion \u2014 RESERVED SLOT for phase e: leave a clearly marked pass-through comment placeholder only, implement nothing\n8. feedback tap\n\nRules:\n- Add the three processors as by-value members of DelayVoice; call their prepare() from DelayVoice::prepare() and reset() from DelayVoice::reset().\n- Call each processor's updateCoefficients() at the bounded control rate from the voice's block/control-rate boundary, not per sample.\n- Delay read positions remain clamped to [8 samples, 8.25 seconds]; do not alter existing clamping.\n- Feedback gain remains T60-derived g = 10^(-3*T/T60) with the hard cap g_final = min(g_requested, 0.985); do not change that logic.\n- juce::ScopedNoDenormals stays at the top of the processor-level entry point; do not add allocation, locks, file IO, string construction, or buffer resizing to the audio path.\n- In CMakeLists.txt, add Source/DSP/RepeatToneProcessor.cpp, Source/DSP/PresenceGuard.cpp, and Source/DSP/RepeatTransientSoftener.cpp to the existing plugin target source list (and to the test runner target's source list if that target compiles DSP sources directly). Do not add new targets, options, or third-party dependencies, and do not touch JUCE/ or the JUCE submodule pin.\n\nThis task does not create test files; tests are added in d.5.",
+  "acceptance_criteria": [
+    "Source/DSP/DelayVoice.h declares RepeatToneProcessor, PresenceGuard, and RepeatTransientSoftener members by value",
+    "Source/DSP/DelayVoice.cpp calls prepare() and reset() on all three processors from DelayVoice::prepare() and DelayVoice::reset()",
+    "The per-sample feedback loop in Source/DSP/DelayVoice.cpp applies, in order: fractional delay read, high-pass, low-pass, presence guard, transient softener, then the feedback tap",
+    "Reserved comment placeholders for mild saturation and restricted diffusion appear between the softener and the feedback tap with no implementation",
+    "updateCoefficients() for all three processors is called at a control-rate or block boundary, not once per sample",
+    "Existing delay read clamping to [8 samples, 8.25 seconds] and the feedback cap g_final = min(g_requested, 0.985) are unchanged",
+    "CMakeLists.txt lists Source/DSP/RepeatToneProcessor.cpp, Source/DSP/PresenceGuard.cpp, and Source/DSP/RepeatTransientSoftener.cpp in the plugin target sources",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release succeeds",
+    "cmake --build build --target ShredSpace_Standalone -j succeeds",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/DelayVoice.h",
+    "Source/DSP/DelayVoice.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/ or change the JUCE submodule pin",
+    "modify Source/DSP/RepeatToneProcessor.h, Source/DSP/RepeatToneProcessor.cpp, Source/DSP/PresenceGuard.h, Source/DSP/PresenceGuard.cpp, Source/DSP/RepeatTransientSoftener.h, or Source/DSP/RepeatTransientSoftener.cpp",
+    "modify Source/PluginProcessor.* or Source/PluginEditor.*",
+    "modify CMakePresets.json",
+    "reorder the binding repeat-loop stage order",
+    "implement the reserved saturation or diffusion slots",
+    "change the delay read clamp range or the 0.985 feedback cap",
+    "add new CMake targets, options, or third-party dependencies",
+    "add allocation, locks, file IO, or string construction to the audio path",
+    "create test files in this task",
+    "reference artist or song names in any source file"
+  ],
+  "allowed_symbols": [
+    "DelayVoice",
+    "RepeatToneProcessor",
+    "PresenceGuard",
+    "RepeatTransientSoftener",
+    "prepare",
+    "reset",
+    "processSample",
+    "processHighPassSample",
+    "processLowPassSample",
+    "updateCoefficients"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose member names for the three processor instances inside DelayVoice",
+      "choose where in the existing block loop the control-rate updateCoefficients() calls are placed",
+      "choose the exact wording of the reserved-slot comments"
+    ],
+    "forbidden": [
+      "change the repeat-loop stage order",
+      "change public DelayVoice method signatures used by PluginProcessor",
+      "introduce new parameters or APVTS entries",
+      "add a new CMake target or dependency"
+    ]
+  },
+  "dependencies": [
+    "d.1",
+    "d.2",
+    "d.3"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

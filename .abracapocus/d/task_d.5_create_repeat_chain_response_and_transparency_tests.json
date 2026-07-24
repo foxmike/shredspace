@@ -1,0 +1,71 @@
+{
+  "task_id": "d.5",
+  "schema_version": 1,
+  "phase": "D",
+  "phase_id": "d",
+  "title": "Create repeat chain response and transparency tests",
+  "description": "Create tests/RepeatChainTests.cpp using the built-in juce::UnitTest framework and register it with the existing console test-runner target in CMakeLists.txt so it runs through CTest.\n\nBefore editing, inspect:\n- CMakeLists.txt (the existing console test runner target, its target_sources list, and the existing add_test/CTest registration added in earlier phases)\n- tests/ (an existing *Tests.cpp from an earlier phase, for the juce::UnitTest registration pattern and the static instance idiom)\n- Source/DSP/RepeatToneProcessor.h (makeLowPass, makeHighPass, makePeaking, magnitudeAt)\n- Source/DSP/PresenceGuard.h (computeCutDb, processSample, getCurrentCutDb)\n- Source/DSP/RepeatTransientSoftener.h (computeAttenuationDb, processSample, setAmountPercent)\n\nRequired test coverage (one juce::UnitTest subclass, e.g. RepeatChainTests, with named sections):\n1. Low-pass magnitude response: for a 48000 Hz rate and a 4000 Hz cutoff, RepeatToneProcessor::magnitudeAt of makeLowPass is within 0.05 of 1/sqrt(2) at the cutoff, above 0.95 at 200 Hz, and below 0.15 at 16000 Hz.\n2. High-pass magnitude response: for a 200 Hz cutoff, magnitude is within 0.05 of 1/sqrt(2) at the cutoff, below 0.15 at 20 Hz, and above 0.95 at 4000 Hz.\n3. Peaking magnitude response: for +6 dB at 3000 Hz with Q 1.0, magnitude at the center is within 0.1 dB of +6 dB, and magnitude far from center (100 Hz and 16000 Hz) is within 0.5 dB of unity. Repeat with -6 dB and assert the symmetric result.\n4. Softener transparency at zero amount: with setAmountPercent(0), feed a 2048-sample signal mixing a 200 Hz sine and a 4000 Hz sine plus a step transient; assert every output sample equals the input sample within 1.0e-4 absolute tolerance (bit-transparent within floating-point tolerance), exercising the complementary-subtraction reconstruction identity.\n5. Softener action at nonzero amount: with setAmountPercent(100), feed a signal with an abrupt high-frequency attack; assert the peak absolute output during the first 5 ms after the attack is at least 1.5 dB below the corresponding zero-amount peak, while the RMS of a steady 200 Hz low-band-only input is unchanged within 0.2 dB (low-band body preserved).\n6. Guard below threshold: drive PresenceGuard with a presence-band tone at a level well below the -24 dB threshold; assert getCurrentCutDb() stays within 0.05 dB of 0 after settling.\n7. Guard above threshold and monotonic knee: assert computeCutDb is 0 at and below threshold, is non-increasing as levelDb rises across the knee, and clamps at exactly -maxCutDb once levelDb exceeds threshold + kneeWidth.\n8. Guard max-cut respect: assert getCurrentCutDb() never goes below -maxCutDb for a very loud presence-band input.\n9. Guard epsilon-accumulation bias: feed a constant-amplitude presence tone for at least 2 seconds of samples at 48000 Hz; assert the detector level implied by getCurrentCutDb() at the 1 second mark and at the 2 second mark differ by less than 0.01 dB, proving the squared-energy state carries no epsilon drift.\n\nRules:\n- Use only juce::UnitTest. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new dependency may be added.\n- Register tests/RepeatChainTests.cpp in the existing test-runner target's source list in CMakeLists.txt. Do not create a new target and do not modify any other CMake configuration.\n- Do not modify any Source/ file; if a test cannot pass, report the discrepancy rather than editing production code.",
+  "acceptance_criteria": [
+    "tests/RepeatChainTests.cpp exists and defines a juce::UnitTest subclass registered via a static instance, using no third-party test framework",
+    "tests/RepeatChainTests.cpp asserts RBJ low-pass, high-pass, and peaking magnitude responses against the expected values via RepeatToneProcessor::magnitudeAt",
+    "tests/RepeatChainTests.cpp asserts the transient softener is transparent within 1.0e-4 per sample at zero amount",
+    "tests/RepeatChainTests.cpp asserts that at 100 percent amount the high-band attack peak is reduced by at least 1.5 dB while steady low-band RMS is preserved within 0.2 dB",
+    "tests/RepeatChainTests.cpp asserts PresenceGuard applies no cut below threshold, a monotonically increasing cut across the knee, and never exceeds the configured maximum cut",
+    "tests/RepeatChainTests.cpp asserts the presence guard shows less than 0.01 dB of drift between the 1 second and 2 second marks of a constant presence tone, proving no epsilon accumulation",
+    "CMakeLists.txt adds tests/RepeatChainTests.cpp to the existing console test-runner target sources without creating a new target",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release succeeds",
+    "cmake --build build -j succeeds",
+    "ctest --test-dir build --output-on-failure passes",
+    "No file under Source/ is created or modified by this task"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/RepeatChainTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/ or change the JUCE submodule pin",
+    "modify any file under Source/",
+    "modify CMakePresets.json",
+    "use Catch2, GoogleTest, doctest, or any framework other than juce::UnitTest",
+    "add any new third-party dependency",
+    "create a new CMake target or change existing target configuration beyond adding the test source file",
+    "weaken or delete existing tests to make the build pass",
+    "reference artist or song names in any source file"
+  ],
+  "allowed_symbols": [
+    "RepeatChainTests",
+    "RepeatToneProcessor",
+    "PresenceGuard",
+    "RepeatTransientSoftener",
+    "magnitudeAt",
+    "makeLowPass",
+    "makeHighPass",
+    "makePeaking",
+    "computeCutDb",
+    "computeAttenuationDb",
+    "getCurrentCutDb",
+    "getCurrentAttenuationDb",
+    "setAmountPercent"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose test signal lengths, buffer sizes, and helper lambdas inside the test file",
+      "choose section naming within the juce::UnitTest subclass",
+      "choose tolerances no looser than those stated in the acceptance criteria"
+    ],
+    "forbidden": [
+      "add a new test framework or dependency",
+      "modify production DSP code to make a test pass",
+      "create a second test-runner target",
+      "loosen the stated tolerances"
+    ]
+  },
+  "dependencies": [
+    "d.4"
+  ],
+  "task_timeout_seconds": 2400,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

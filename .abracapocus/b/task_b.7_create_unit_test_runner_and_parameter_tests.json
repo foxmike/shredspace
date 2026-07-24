@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task_id": "b.7",
+  "phase": "B",
+  "phase_id": "b",
+  "title": "Create unit test runner and parameter tests",
+  "description": "Create tests/TestMain.cpp and tests/ParameterTests.cpp, and modify CMakeLists.txt ONLY. This is the phase's final serialized CMakeLists.txt write.\n\nBefore editing, inspect:\n- CMakeLists.txt as left by task b.6 (ShredSpace target and target_sources block)\n- Source/Parameters/ParameterIDs.h, ParameterLayout.h, ParameterSnapshot.h\n- Source/PluginProcessor.h (getValueTreeState, getStateInformation, setStateInformation)\n\nTESTING FRAMEWORK: juce::UnitTest ONLY. Catch2, GoogleTest, doctest, and every other third-party test framework are forbidden; no new third-party dependency of any kind may be added.\n\n1. tests/TestMain.cpp: a console main() that constructs a juce::UnitTestRunner, sets setAssertOnFailure(false), runs all registered tests, iterates the results, prints failures, and returns a non-zero exit code if any test failed. Initialize and shut down JUCE appropriately for a console app (juce::ScopedJuceInitialiser_GUI or equivalent).\n\n2. tests/ParameterTests.cpp: a juce::UnitTest subclass (static instance, category \"ShredSpace/Parameters\") that builds the layout via shredspace::createParameterLayout() inside a juce::AudioProcessorValueTreeState attached to a test AudioProcessor (or by instantiating the plugin processor directly) and asserts:\n   a. EXISTENCE: every ID constant declared in Source/Parameters/ParameterIDs.h resolves to a parameter in the layout (apvts.getParameter(id) != nullptr). Enumerate the IDs explicitly in a local array; do not skip any group.\n   b. RANGES AND DEFAULTS: for a representative but broad set covering all eight groups, assert the parameter's NormalisableRange start/end and its default value equal the values frozen in tasks b.2, b.3, and b.4. Cover at minimum: GLOBAL_INPUT_GAIN (-24/+24, default 0), GLOBAL_MIX (0/100, default 22), GLOBAL_BYPASS_MODE default index 1, PERF_MACRO_TIME (20/2000, default 380), PERF_MACRO_TAIL (0.15/12, default 2.8), PERF_ADAPTIVE_MODE default index 2, TIME_SYNC_DIVISION with 15 choices and default index 6, STEREO_LF_MONO_FREQ (60/500, default 180), SCENE_MORPH (0/100, default 0), VOICE_A_LEVEL default -12 and VOICE_B_LEVEL default -10, VOICE_A_TIME_RATIO default 0.5 and VOICE_B_TIME_RATIO default 1.0, VOICE_A_WIDTH default 60 and VOICE_B_WIDTH default 130, VOICE_A_LPF default 6500 and VOICE_B_LPF default 5500, INTEL_SENSITIVITY (0/100, default 55), INTEL_INPUT_GATE (-80/-20, default -55), INTEL_WET_REDUCTION (0/18, default 8), INTEL_BLOOM_RELEASE (50/3000, default 800), INTEL_TRANSIENT_CROSSOVER (1000/6000, default 2500). Compare floats with an explicit tolerance.\n   c. INTERNAL STATE ABSENCE: assert that no parameter ID in the layout contains any of these substrings (case-insensitive): \"RUNNING_MEAN\", \"DEVIATION\", \"FFT\", \"ONSET\", \"HISTORY\", \"ACTIVITY\", \"DENSITY_VALUE\", \"SUSTAIN_VALUE\", \"PHRASE_GAP_VALUE\", \"DESTINATION_TABLE\", \"SCENE_NAME\", \"PROFILE_NAME\", \"PROFILE_DESC\", \"PROFILE_TAG\", \"MIGRATION\", \"TELEMETRY\", \"INTERVENTION\", \"BUFFER\", \"RESAMPLER\". Enumerate the full parameter list from the APVTS to run this check.\n   d. STATE ROUND-TRIP: instantiate the ShredSpace processor, change several parameters away from their defaults across different groups, call getStateInformation into a juce::MemoryBlock, construct a second processor instance, call setStateInformation on it with that block, and assert every parameter's normalized value in the second instance equals the first instance's within tolerance. Also assert that calling setStateInformation with an empty or corrupt MemoryBlock leaves the second processor's parameters at their previous values.\n\n3. CMakeLists.txt: add a console executable target named ShredSpaceTests built from tests/TestMain.cpp, tests/ParameterTests.cpp, Source/Parameters/ParameterLayout.cpp, Source/Parameters/ParameterSnapshot.cpp, and the processor sources needed for the round-trip test. Link the required JUCE modules through juce_add_console_app or add_executable plus target_link_libraries with the same JUCE module set the plugin uses. Enable testing with enable_testing() and register the target with add_test(NAME ShredSpaceTests COMMAND ShredSpaceTests). Do not create new plugin targets, do not change the project identity, do not change the JUCE submodule pin, and do not remove or reorder existing ShredSpace target configuration.\n\nPer this phase's risk notes, this task's own verification is compile-only: build the test target but do not run ctest here; ctest execution belongs to phase verification. No artist or song names in any file.",
+  "acceptance_criteria": [
+    "tests/TestMain.cpp defines a console main() that runs juce::UnitTestRunner over all registered tests and returns non-zero on any failure",
+    "tests/ParameterTests.cpp defines a juce::UnitTest subclass asserting ID existence, ranges and defaults, internal-state name absence, and get/setStateInformation round-trip equality",
+    "tests/ParameterTests.cpp and tests/TestMain.cpp use only juce::UnitTest and include no Catch2, GoogleTest, doctest, or other third-party test framework",
+    "CMakeLists.txt defines a ShredSpaceTests console executable and registers it via enable_testing() and add_test(NAME ShredSpaceTests COMMAND ShredSpaceTests)",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpaceTests succeeds",
+    "CMakeLists.txt still builds the ShredSpace VST3, LV2, and Standalone targets with the unchanged project identity and JUCE submodule pin",
+    "No file outside tests/TestMain.cpp, tests/ParameterTests.cpp, and CMakeLists.txt is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/TestMain.cpp",
+    "tests/ParameterTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify Source/Parameters/ParameterIDs.h, ParameterLayout.h, ParameterLayout.cpp, ParameterSnapshot.h, or ParameterSnapshot.cpp",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify CMakePresets.json",
+    "modify anything under JUCE/ or change the JUCE submodule pin",
+    "add Catch2, GoogleTest, doctest, or any other third-party dependency",
+    "change the plugin name, vendor, version, manufacturer code, plugin code, bundle identifier, or LV2 URI",
+    "remove or reorder existing ShredSpace target configuration in CMakeLists.txt",
+    "weaken or delete an assertion to make a test pass"
+  ],
+  "allowed_symbols": [
+    "main",
+    "ParameterTests",
+    "ShredSpaceTests"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose juce_add_console_app or add_executable for the test target",
+      "choose the float comparison tolerance used in assertions",
+      "choose whether the round-trip test uses the plugin processor directly or a minimal test processor for layout-only checks"
+    ],
+    "forbidden": [
+      "introduce a third-party test framework",
+      "add a test helper library target",
+      "change the parameter layout to make an assertion pass"
+    ]
+  },
+  "dependencies": [
+    "b.6"
+  ],
+  "task_timeout_seconds": 2700,
+  "verification_commands": []
+}

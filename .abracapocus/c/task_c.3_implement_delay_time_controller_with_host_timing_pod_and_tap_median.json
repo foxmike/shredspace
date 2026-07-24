@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "c.3",
+  "phase": "C",
+  "phase_id": "c",
+  "title": "Implement delay time controller with host timing pod and tap median",
+  "description": "Create Source/DSP/DelayTimeController.h and Source/DSP/DelayTimeController.cpp implementing delay-time mode resolution for the two voices.\n\nBefore editing, inspect:\n- Source/DSP/ (existing module style, include guards, namespace)\n- Source/PluginProcessor.h (to confirm the processor is the only place that queries the host; DSP modules never query the host)\n- CMakeLists.txt (source layout only; do NOT modify it in this task)\n\nRequired implementation:\n1. Define in DelayTimeController.h the plain POD struct, verbatim in field order and types:\n   struct HostTiming { double bpm; bool bpmValid; bool isPlaying; std::int64_t samplePosition; };\n   The processor fills this once per block and passes it in. DSP modules must never call any host/playhead API.\n2. Time modes:\n   - Milliseconds: D_samples = Fs * T_ms / 1000.\n   - HostSync: T_quarter = 60 / BPM; T = ratio * T_quarter. Divisions Whole (4.0), Half (2.0), Quarter (1.0), Eighth (0.5), Sixteenth (0.25), each with a dotted variant (x1.5) and a triplet variant (x2/3), expressed as ratios of a quarter note.\n   - Tap: maintain a fixed K = 5 interval history in a fixed-size array (no dynamic allocation); the tempo is the median of the history. Intervals outside [100 ms, 3000 ms] are rejected and never enter the history.\n3. BPM fallback: when bpmValid is false, retain the last valid BPM. If no valid BPM was ever received, fall back to 120 BPM. Never jump to zero, negative, or undefined delay.\n4. Per-voice target: T_voice = T_base * ratio + fineOffset (in seconds). Modulation and stereo offsets are applied downstream, not here.\n5. Transition requests: expose a small result/request type indicating whether a change should be rendered as Smooth or Bend, and issue such a request for large changes, including host-tempo jumps, scene changes, and profile changes. Do not use an ordinary linear smoother for large delay-time changes.\n6. No allocation, locking, IO, string construction, or unbounded loops outside prepare().\n\nThe files must be standard C++20 only (<cmath>, <cstdint>, <array>, <algorithm>). Do NOT include any JUCE header.",
+  "acceptance_criteria": [
+    "Source/DSP/DelayTimeController.h and Source/DSP/DelayTimeController.cpp exist",
+    "g++ -std=c++20 -fsyntax-only -I Source Source/DSP/DelayTimeController.cpp passes",
+    "DelayTimeController.h defines struct HostTiming { double bpm; bool bpmValid; bool isPlaying; std::int64_t samplePosition; }",
+    "Milliseconds mode computes D_samples = Fs * T_ms / 1000 and HostSync computes T = ratio * (60 / BPM) with Whole, Half, Quarter, Eighth, Sixteenth plus dotted x1.5 and triplet x2/3 ratios",
+    "Tap mode stores a fixed K = 5 interval history in a fixed-size array, takes the median, and rejects intervals outside 100-3000 ms",
+    "When bpmValid is false the last valid BPM is retained, and 120 BPM is used if none was ever received",
+    "Per-voice target is computed as T_voice = T_base * ratio + fineOffset",
+    "The controller issues Smooth or Bend transition requests for large delay-time changes instead of using an ordinary linear smoother",
+    "No host or playhead API is called from DelayTimeController",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/DelayTimeController.h",
+    "Source/DSP/DelayTimeController.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "include any JUCE header in DelayTimeController.h or DelayTimeController.cpp",
+    "call any host, playhead, or transport API from a DSP module",
+    "create or modify Source/DSP/FractionalDelay.*, Source/DSP/FeedbackController.*, or Source/DSP/DelayVoice.*",
+    "use std::vector or dynamic allocation for the tap history",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "HostTiming",
+    "DelayTimeController",
+    "TimeMode",
+    "SyncDivision",
+    "SyncModifier",
+    "TransitionRequest",
+    "TransitionKind",
+    "prepare",
+    "reset",
+    "setHostTiming",
+    "setTimeMode",
+    "setMilliseconds",
+    "setSyncDivision",
+    "registerTap",
+    "setVoiceRatio",
+    "setFineOffsetSeconds",
+    "getVoiceTimeSeconds",
+    "takeTransitionRequest",
+    "kTapHistorySize",
+    "kFallbackBpm",
+    "kMinTapIntervalMs",
+    "kMaxTapIntervalMs"
+  ],
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

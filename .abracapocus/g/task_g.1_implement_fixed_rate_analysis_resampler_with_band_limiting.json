@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "task_id": "g.1",
+  "phase": "G",
+  "phase_id": "g",
+  "title": "Implement fixed rate analysis resampler with band limiting",
+  "description": "Create Source/Analysis/AnalysisResampler.h and Source/Analysis/AnalysisResampler.cpp ONLY. This is the fixed-rate front end for the entire ShredSpace analysis path: every downstream analyzer runs at a fixed internal analysis rate of 48000 Hz regardless of host sample rate, which is the sample-rate-invariance guarantee of the product.\n\nBefore editing, inspect:\n- CMakeLists.txt (top-level, to learn the existing target names, C++20 standard setting, and JUCE module linkage; do NOT edit it in this task)\n- Source/PluginProcessor.h and Source/PluginProcessor.cpp (to match the existing prepareToPlay/processBlock conventions and naming style)\n- Any existing Source/DSP/*.h headers (to match brace style, namespace usage, and header guard/#pragma once convention already used in this repository)\n\nImplement class AnalysisResampler with this contract:\n- static constexpr double analysisSampleRate = 48000.0.\n- prepare (double hostSampleRate, int maxBlockSize): allocate ALL storage here. Preallocate the anti-alias filter state, the input staging buffer, and the output buffer sized for the worst-case ratio (host 44100 -> 48000 upsampling produces at most ceil(maxBlockSize * 48000.0/44100.0) + 4 output samples; size the output buffer with that formula plus a safety margin of 8 samples). Reset phase accumulator and filter state.\n- reset(): clears filter state, phase accumulator, and internal history samples without allocating.\n- process (const float* monoAnalysisInput, int numSamples, float* outBuffer, int outBufferCapacity) -> int numOutputSamples: performs analysis-band low-pass filtering followed by stateful rational rate conversion, writes converted samples into outBuffer, and returns the count actually produced. Never write past outBufferCapacity; if the capacity would be exceeded, stop and return what fits.\n\nBand limiting: apply a low-pass before rate conversion so content above the useful analysis band (approximately 150 Hz to 8 kHz) cannot alias into the band after conversion. Use a cascade of two biquad low-pass sections (Butterworth-style, Q = 0.7071 each) with cutoff at min(9000.0, 0.45 * min(hostSampleRate, analysisSampleRate)). Compute biquad coefficients once in prepare(); process() must not recompute or allocate them. Filter state is member data and MUST persist across blocks.\n\nStateful conversion: maintain a double phase accumulator `readPhase` and an increment `phaseIncrement = hostSampleRate / analysisSampleRate`. When hostSampleRate is 44100 the increment is < 1 (upsampling); when it is 88200, 96000, 176400, or 192000 the increment is > 1 (downsampling). When it is exactly 48000, bypass conversion and copy the band-limited samples straight through. Use linear interpolation between the previous retained sample and the current sample; retain the last input sample(s) needed for interpolation across block boundaries in member state so that the long-term average output rate is correct and no discontinuity occurs at block edges. The phase accumulator must be carried across blocks (subtract the consumed integer sample count each block, never reset it per block).\n\nReal-time rules restated and binding for this file: inside process() there must be no heap allocation, no locks, no file IO, no string construction, no GUI calls, no unbounded loops, no buffer resizing, and no destruction of heap-owned objects. All maximum-size buffers are allocated in prepare(). Use juce::ScopedNoDenormals or explicit denormal flushing where the filter state is updated. This resampler affects only the analysis path: it must not touch dry or wet audio and must add no reported latency to dry or wet audio (it reports no latency at all; do not call setLatencySamples from this file).\n\nDo not introduce any new third-party dependency. Use only the C++20 standard library and JUCE modules already linked by the project.",
+  "acceptance_criteria": [
+    "Source/Analysis/AnalysisResampler.h and Source/Analysis/AnalysisResampler.cpp exist and declare/define class AnalysisResampler with prepare, reset, and process members",
+    "AnalysisResampler.h defines a compile-time constant analysis rate of 48000.0 and the class stores a persistent phase accumulator and persistent low-pass filter state as members",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_dsp=1 Source/Analysis/AnalysisResampler.cpp succeeds",
+    "AnalysisResampler::process contains no call to new, malloc, resize, setSize, std::vector::push_back, std::string construction, or any locking primitive",
+    "All buffers and filter coefficients used by process are allocated and computed in prepare",
+    "No file outside Source/Analysis/AnalysisResampler.h and Source/Analysis/AnalysisResampler.cpp is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Analysis/AnalysisResampler.h",
+    "Source/Analysis/AnalysisResampler.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt",
+    "modify CMakePresets.json",
+    "modify anything under JUCE/",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "add any new third-party dependency",
+    "allocate memory, lock, or construct strings inside process()",
+    "report or introduce plugin latency",
+    "make FFT size or hop size depend on host sample rate"
+  ],
+  "allowed_symbols": [
+    "AnalysisResampler",
+    "analysisSampleRate",
+    "prepare",
+    "reset",
+    "process"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose internal member names and buffer layout",
+      "choose biquad implementation form (direct form I or II transposed)",
+      "add private helper methods inside AnalysisResampler"
+    ],
+    "forbidden": [
+      "introduce a new resampling library or third-party dependency",
+      "change the fixed 48000 Hz analysis rate",
+      "expose analysis buffers to the GUI or message thread",
+      "modify shared plugin files"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

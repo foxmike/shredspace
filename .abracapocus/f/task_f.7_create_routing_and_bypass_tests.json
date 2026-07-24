@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "task_id": "f.7",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Create routing and bypass tests",
+  "description": "Create tests/RoutingBypassTests.cpp using the built-in juce::UnitTest framework and register it in CMakeLists.txt on the existing console test-runner target. This is a serialized CMakeLists.txt write: it runs after f.6 and before f.8.\n\nBefore editing, inspect:\n- Source/DSP/RoutingEngine.h (topologies, normalization, mixing, bypass surface)\n- Source/PluginProcessor.h (how the processor is constructed and prepared in existing tests)\n- An existing test file under tests/ (for the juce::UnitTest registration idiom already used in this repo)\n- CMakeLists.txt (the console test-runner target and its target_sources list)\n\nRequired test coverage:\n- All three topologies: Parallel, A-into-B, and B-into-A produce the expected voice contributions, including the cascade gains cos(pi*cascade/2) and sin(pi*cascade/2).\n- Wet voice normalization N = sqrt(max(1, l_A*l_A + l_B*l_B)) holds for representative level pairs, including l_A = l_B = 1 and l_A = l_B = 0.5.\n- A routing topology change is click-free: assert the sample-to-sample delta of the output stays below a stated small threshold across the 30 ms transition, and that the transition length corresponds to 30 ms at the test sample rate.\n- Hard bypass: wet fades out, dry is preserved sample-accurately, and the tail is cleared only after the transition completes.\n- Trails bypass: no new delay input enters the loop (feed a burst then engage trails and assert the tail contains no contribution from post-engage input), while dry continues unchanged.\n- Bypass transitions measure 20 ms and are click-free by the same delta threshold.\n- Insert mixing satisfies dryGain = cos(pi*m/2) and wetGain = sin(pi*m/2) within a stated tolerance; Send mixing outputs wet only.\n\nUse only juce::UnitTest. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new dependency may be introduced. Tests must be deterministic: fixed sample rates (use 48000 Hz and 44100 Hz), fixed block sizes, and no reliance on wall-clock timing.\n\nIn CMakeLists.txt, add only tests/RoutingBypassTests.cpp to the existing test-runner target sources. Do not add or reorder other test files and do not modify the plugin target's source list.",
+  "acceptance_criteria": [
+    "tests/RoutingBypassTests.cpp exists and defines juce::UnitTest subclasses with static instances, using no third-party test framework",
+    "tests/RoutingBypassTests.cpp asserts Parallel, A-into-B, and B-into-A topology behavior including the cos(pi*cascade/2) and sin(pi*cascade/2) cascade gains",
+    "tests/RoutingBypassTests.cpp asserts wet normalization N = sqrt(max(1, l_A*l_A + l_B*l_B)) for at least two level pairs",
+    "tests/RoutingBypassTests.cpp asserts the routing transition spans 30 ms and is click-free against an explicit sample-delta threshold",
+    "tests/RoutingBypassTests.cpp asserts hard bypass preserves dry and clears the tail only after the transition, and that trails bypass admits no post-engage delay input while dry continues",
+    "tests/RoutingBypassTests.cpp asserts Insert gains dryGain = cos(pi*m/2) and wetGain = sin(pi*m/2) within a stated tolerance and that Send outputs wet only",
+    "CMakeLists.txt adds tests/RoutingBypassTests.cpp to the existing console test-runner target and adds no new dependency",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpaceTests -j 4 succeeds",
+    "ctest --test-dir build --output-on-failure passes",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/RoutingBypassTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify any file under Source/",
+    "modify other files under tests/",
+    "modify CMakePresets.json",
+    "use Catch2, GoogleTest, doctest, or any non-juce::UnitTest framework",
+    "add FetchContent, find_package, or any new third-party dependency",
+    "change the plugin target's source list in CMakeLists.txt",
+    "weaken production behavior to make a test pass",
+    "write tests that depend on wall-clock timing or random seeds"
+  ],
+  "allowed_symbols": [
+    "RoutingTopologyTests",
+    "RoutingTransitionTests",
+    "BypassTests"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose test class names, tolerances, and click thresholds, stating them explicitly in the test source",
+      "choose the fixed block sizes used in the tests"
+    ],
+    "forbidden": [
+      "introduce a test helper library shared across phases",
+      "change any production interface to make testing easier",
+      "skip a required assertion by marking it as pending or disabled"
+    ]
+  },
+  "dependencies": [
+    "f.6"
+  ],
+  "task_timeout_seconds": 2400,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

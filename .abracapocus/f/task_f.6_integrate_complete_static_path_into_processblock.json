@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "task_id": "f.6",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Integrate complete static path into processBlock",
+  "description": "Compose the complete static audio path in Source/PluginProcessor.h and Source/PluginProcessor.cpp, and register the new Source/DSP sources in CMakeLists.txt. This is the phase's single serialized CMakeLists.txt source-registration write.\n\nBefore editing, inspect:\n- Source/DSP/RoutingEngine.h (topologies, mixing, bypass surface from f.1 and f.4)\n- Source/DSP/FeedbackController.h (cross-feedback surface from f.2)\n- Source/DSP/SafetyProcessor.h (safety surface from f.3)\n- Source/DSP/DelayVoice.h (Hold surface from f.5)\n- Source/PluginProcessor.h and .cpp (existing prepareToPlay, isBusesLayoutSupported, processBlock, member ownership)\n- CMakeLists.txt (existing target_sources list for the plugin target)\n\nRequired processBlock composition, in this order:\n1. juce::ScopedNoDenormals at the very top of processBlock.\n2. Input gain g = 10^(G_dB/20), with the dB value smoothed over 20 ms in dB and converted to linear only afterward.\n3. Preserve the dry path in a buffer allocated in prepareToPlay.\n4. Per-block HostTiming acquisition (playhead read once per block, not per sample).\n5. Process both DelayVoices, honouring RoutingEngine::delayInputGain() for trails bypass.\n6. RoutingEngine (topology, normalization, cascade, bypass).\n7. StereoProcessor.\n8. SafetyProcessor (mandatory layer plus optional limiter; apply the ceiling to the requested feedback gain and honour the consumable buffer-clear request at a bounded block boundary).\n9. Global mix (Insert or Send).\n10. Output gain, smoothed 20 ms in dB.\n\nBus layout requirements: mono-mono, mono-stereo, and stereo-stereo must be supported by isBusesLayoutSupported. Mono dry input remains center-equivalent in stereo; width is created only in the wet path; unused output channels are initialized deterministically (explicitly zeroed or explicitly filled), never left with stale contents.\n\nAllocation: every maximum-size buffer, including the dry copy and per-voice staging buffers, is allocated in prepareToPlay. processBlock performs no heap allocation, locks, file IO, profile parsing, string construction, GUI calls, unbounded loops, buffer resizing, FFT allocation, coefficient-object allocation, or destruction of heap-owned objects.\n\nCMakeLists.txt: add Source/DSP/RoutingEngine.cpp and Source/DSP/SafetyProcessor.cpp (and any other new .cpp introduced in this phase) to the existing plugin target_sources list. Do not add test file registrations here; tasks f.7, f.8, and f.9 own those, each serialized after this one. Do not add any third-party dependency, FetchContent call, or find_package for a new library.",
+  "acceptance_criteria": [
+    "Source/PluginProcessor.cpp processBlock begins with juce::ScopedNoDenormals",
+    "Source/PluginProcessor.cpp processBlock applies input gain as 10^(G_dB/20) from a dB-domain smoothed value, then dry capture, HostTiming, both DelayVoices, RoutingEngine, StereoProcessor, SafetyProcessor, global mix, and output gain in that order",
+    "Source/PluginProcessor.cpp scales delay voice input by RoutingEngine::delayInputGain so trails bypass stops new delay input",
+    "Source/PluginProcessor.cpp honours the SafetyProcessor buffer-clear request at a block boundary rather than clearing large buffers mid-block",
+    "Source/PluginProcessor.cpp isBusesLayoutSupported accepts mono-mono, mono-stereo, and stereo-stereo and rejects other layouts",
+    "Source/PluginProcessor.cpp deterministically initializes unused output channels and keeps mono dry input center-equivalent in stereo",
+    "Source/PluginProcessor.cpp allocates all working buffers in prepareToPlay and processBlock contains no new/delete, malloc, buffer resize, juce::String construction, lock acquisition, or GUI calls",
+    "CMakeLists.txt lists Source/DSP/RoutingEngine.cpp and Source/DSP/SafetyProcessor.cpp in the plugin target sources and adds no new third-party dependency",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpace_VST3 ShredSpace_LV2 ShredSpace_Standalone -j 4 succeeds",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/PluginProcessor.h",
+    "Source/PluginProcessor.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify CMakePresets.json",
+    "modify Source/DSP/RoutingEngine.h, Source/DSP/RoutingEngine.cpp, Source/DSP/FeedbackController.h, Source/DSP/FeedbackController.cpp, Source/DSP/SafetyProcessor.h, Source/DSP/SafetyProcessor.cpp, Source/DSP/DelayVoice.h, or Source/DSP/DelayVoice.cpp",
+    "register test source files in CMakeLists.txt in this task",
+    "add FetchContent, find_package, or any new third-party dependency",
+    "change the JUCE submodule pin or plugin identity fields (name, vendor, version, manufacturer code, plugin code, bundle identifier, LV2 URI)",
+    "allocate memory, lock, parse profiles, or construct strings inside processBlock"
+  ],
+  "allowed_symbols": [
+    "ShredSpaceAudioProcessor::prepareToPlay",
+    "ShredSpaceAudioProcessor::releaseResources",
+    "ShredSpaceAudioProcessor::isBusesLayoutSupported",
+    "ShredSpaceAudioProcessor::processBlock",
+    "ShredSpaceAudioProcessor::routingEngine",
+    "ShredSpaceAudioProcessor::safetyProcessor",
+    "ShredSpaceAudioProcessor::voiceA",
+    "ShredSpaceAudioProcessor::voiceB"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose member names and buffer layout for dry and per-voice staging buffers",
+      "choose how HostTiming is cached for the block"
+    ],
+    "forbidden": [
+      "change any DSP module public interface",
+      "introduce a new processing graph or framework",
+      "add parameters or GUI wiring",
+      "support bus layouts beyond mono-mono, mono-stereo, and stereo-stereo"
+    ]
+  },
+  "dependencies": [
+    "f.4",
+    "f.5"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

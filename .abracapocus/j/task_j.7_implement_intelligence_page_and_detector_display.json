@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "task_id": "j.7",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Implement intelligence page and detector display",
+  "description": "Create Source/GUI/DetectorDisplay.h, Source/GUI/DetectorDisplay.cpp, Source/GUI/IntelligencePage.h, and Source/GUI/IntelligencePage.cpp.\n\nDetectorDisplay is `class DetectorDisplay : public juce::Component, private juce::Timer`. It takes a `TelemetryState&`, drains the history FIFO via `readHistory` on a 30 Hz timer into its own fixed-size ring of `HistorySample` values, and paints scrolling onset, density, sustain, and phrase-gap traces. Dropped samples are acceptable and must not cause gaps in the drawing logic or asserts. It must never treat the FIFO as authoritative for current values; current scalar values come from the TelemetryState atomics.\n\nIntelligencePage is `class IntelligencePage : public juce::Component` and hosts: sensitivity, input gate, density window and thresholds, sustain thresholds, phrase-gap timing, contraction response, bloom response, and the adaptation destination amounts, plus an owned DetectorDisplay.\n\nThe adaptation destination amount controls set adaptive delta amounts only. They must never call `setValueNotifyingHost` on the destination parameters themselves and must never rewrite base APVTS values.\n\nThe page owns its own APVTS attachments as `std::unique_ptr` members and uses the exact IDs from the parameter layout header.\n\nBefore editing, inspect:\n- Source/Telemetry/TelemetryState.h (HistorySample, readHistory, and scalar accessors created in j.2)\n- Source/Parameters/ParameterLayout.h (authoritative adaptive/detector parameter IDs)\n- Source/GUI/CustomLookAndFeel.h (shared colours)\n- Source/PluginProcessor.h (APVTS and getTelemetryState accessors)\n\nDo not register the files in CMakeLists.txt; j.8 owns that.",
+  "acceptance_criteria": [
+    "Source/GUI/DetectorDisplay.h declares class DetectorDisplay deriving from juce::Component and juce::Timer and taking a TelemetryState& constructor argument",
+    "Source/GUI/DetectorDisplay.cpp drains history via TelemetryState::readHistory on a timer into a fixed-size ring buffer allocated at construction and never resized during paint or timerCallback",
+    "Source/GUI/DetectorDisplay.cpp paints onset, density, sustain, and phrase-gap traces and tolerates dropped history samples without asserting",
+    "Source/GUI/IntelligencePage.h declares class IntelligencePage deriving from juce::Component and owning a DetectorDisplay instance",
+    "Source/GUI/IntelligencePage.cpp creates controls for sensitivity, input gate, density window and thresholds, sustain thresholds, phrase-gap timing, contraction response, bloom response, and the adaptation destination amounts",
+    "Every parameter ID string used in Source/GUI/IntelligencePage.cpp matches an ID declared in Source/Parameters/ParameterLayout.h",
+    "No control callback in Source/GUI/IntelligencePage.cpp calls setValueNotifyingHost on an adaptation destination parameter",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/GUI/DetectorDisplay.h",
+    "Source/GUI/DetectorDisplay.cpp",
+    "Source/GUI/IntelligencePage.h",
+    "Source/GUI/IntelligencePage.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/Telemetry/TelemetryState.* or Source/PluginProcessor.*",
+    "modify Source/PluginEditor.*, Source/Parameters/*, or any other page file",
+    "call setValueNotifyingHost on adaptation destination parameters",
+    "treat the history fifo as authoritative for current detector values",
+    "include any DSP header in the GUI",
+    "add new third-party dependencies"
+  ],
+  "allowed_symbols": [
+    "DetectorDisplay",
+    "IntelligencePage",
+    "timerCallback",
+    "paint",
+    "resized"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the display ring size, timer rate, and trace colours",
+      "choose section grouping and label text on the page"
+    ],
+    "forbidden": [
+      "add new telemetry channels or atomics",
+      "change detector or adaptive DSP behaviour",
+      "write destination parameters directly from adaptation amount controls"
+    ]
+  },
+  "dependencies": [
+    "j.3"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

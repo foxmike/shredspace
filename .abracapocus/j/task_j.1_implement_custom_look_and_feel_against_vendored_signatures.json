@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "task_id": "j.1",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Implement custom look and feel against vendored signatures",
+  "description": "Create Source/GUI/CustomLookAndFeel.h and Source/GUI/CustomLookAndFeel.cpp defining `class CustomLookAndFeel : public juce::LookAndFeel_V4` for the ShredSpace visual identity (vendor nSpace Systems, product ShredSpace 1.0.0).\n\nBINDING API RULE (known prior failure mode from Aural Maximizer Pro): every override MUST be copied from the actual vendored JUCE headers on disk at the pinned submodule commit 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2. Never write an override from remembered API. In particular, in this vendored revision `drawPopupMenuItem` takes individual parameters `(juce::Graphics&, const juce::Rectangle<int>& area, bool isSeparator, bool isActive, bool isHighlighted, bool isTicked, bool hasSubMenu, const juce::String& text, const juce::String& shortcutKeyText, const juce::Drawable* icon, const juce::Colour* textColour)` and NOT a `juce::PopupMenu::Item` struct. Copy each signature verbatim, mark it `override`, and keep parameter types (including const/reference qualification) identical to the header.\n\nBefore editing, inspect:\n- JUCE/modules/juce_gui_basics/lookandfeel/juce_LookAndFeel_V4.h (exact declarations of every method you intend to override)\n- JUCE/modules/juce_gui_basics/lookandfeel/juce_LookAndFeel_V2.h (base declarations for anything not redeclared in V4)\n- JUCE/modules/juce_gui_basics/lookandfeel/juce_LookAndFeel_V4.cpp (default drawing behaviour you are replacing)\n- CMakeLists.txt (existing target name and JUCE module linkage; do NOT edit it in this task)\n\nImplement at minimum: a `ColourScheme`-style dark palette applied in the constructor via `setColourScheme` and explicit `setColour` calls for `juce::Slider`, `juce::Label`, `juce::TextButton`, `juce::ComboBox`, and `juce::PopupMenu` colour IDs; `drawRotarySlider`; `drawLinearSlider`; `drawButtonBackground`; `drawComboBox`; `drawPopupMenuItem` (exact vendored signature above); `getTextButtonFont`; and `drawLabel`. Provide named colour constants as static members so the pages can share them.\n\nThis task creates no dependency on DSP or telemetry code. Do not include any DSP header. No artist or song names may appear in any string, comment, or identifier.",
+  "acceptance_criteria": [
+    "Source/GUI/CustomLookAndFeel.h exists and declares class CustomLookAndFeel deriving from juce::LookAndFeel_V4",
+    "Source/GUI/CustomLookAndFeel.cpp exists and defines every method declared in Source/GUI/CustomLookAndFeel.h",
+    "The drawPopupMenuItem override in Source/GUI/CustomLookAndFeel.h uses the individual-parameter signature (isSeparator, isActive, isHighlighted, isTicked, hasSubMenu, text, shortcutKeyText, icon, textColour) and does not reference juce::PopupMenu::Item",
+    "Every method marked override in Source/GUI/CustomLookAndFeel.h has a matching declaration in JUCE/modules/juce_gui_basics/lookandfeel/juce_LookAndFeel_V4.h or juce_LookAndFeel_V2.h with identical parameter types",
+    "g++ -std=c++20 -fsyntax-only over Source/GUI/CustomLookAndFeel.cpp succeeds once JUCE module include paths are supplied, i.e. the file contains no syntax errors",
+    "Source/GUI/CustomLookAndFeel.h and .cpp include no header from Source/DSP or Source/Telemetry",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/GUI/CustomLookAndFeel.h",
+    "Source/GUI/CustomLookAndFeel.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, Source/PluginEditor.h, Source/PluginEditor.cpp",
+    "add new third-party dependencies",
+    "write an override signature from memory instead of copying it from the vendored JUCE header",
+    "include any DSP or Telemetry header",
+    "use any artist or song name in identifiers, strings, or comments"
+  ],
+  "allowed_symbols": [
+    "CustomLookAndFeel",
+    "drawRotarySlider",
+    "drawLinearSlider",
+    "drawButtonBackground",
+    "drawComboBox",
+    "drawPopupMenuItem",
+    "getTextButtonFont",
+    "drawLabel"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose specific colour values and stroke widths for the dark palette",
+      "add private static helper functions local to CustomLookAndFeel.cpp"
+    ],
+    "forbidden": [
+      "introduce a new look-and-feel base class other than juce::LookAndFeel_V4",
+      "load external image or font resources",
+      "change the plugin target structure"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

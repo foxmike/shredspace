@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "task_id": "e.1",
+  "phase": "E",
+  "phase_id": "e",
+  "title": "Implement modulation engine with rack pitch cap and drift",
+  "description": "Create Source/DSP/ModulationEngine.h and Source/DSP/ModulationEngine.cpp implementing per-voice, per-channel delay-time modulation for ShredSpace (vendor nSpace Systems, version 1.0.0).\n\nBefore editing, inspect:\n- CMakeLists.txt (target names, source list layout, C++20 standard, JUCE submodule usage)\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (existing per-voice structure, prepare/process signatures, sample-rate handling conventions)\n- Any existing Source/DSP/*.h module in the repository, and match its namespace, include style, header-guard/pragma-once style, and brace/naming conventions exactly.\n\nRequired behavior (implement exactly these equations; do not substitute your own):\n1. Sinusoidal LFO per channel: m = A_effective * sin(2*pi*rate*n/Fs + phase). Rate range 0.05-5 Hz. User depth range 0-8 ms (store depth in seconds internally). Right-channel phase = left-channel phase + phaseOffset, with phaseOffset range 0-180 degrees (convert to radians internally).\n2. Rack-character pitch cap, enforced in code and not merely documented: peakRateDeviation = 2*pi*rateHz*depthSeconds; maxRateDeviation = 2^(25.0/1200.0) - 1 (approximately 0.01455, i.e. 25 cents); maxDepthForRate = maxRateDeviation / (2*pi*rateHz); depthEffective = min(depthUser, maxDepthForRate). Guard against rateHz at or near zero before dividing. Deeper movement must remain available at slow rates; extreme wobble must be prevented at fast rates. Bend mode is exempt from this cap: expose a boolean bend-exempt flag (for example setBendExempt(bool)) that, when true, uses depthUser directly.\n3. Random drift: bounded white noise in [-1, 1] low-passed at a 0.08 Hz cutoff via drift[n] = alphaDrift*drift[n-1] + (1 - alphaDrift)*noise[n], with alphaDrift derived from the 0.08 Hz cutoff and the current sample rate. Use juce::Random owned by the engine and seeded in prepare; never allocate in the process path.\n4. Combined output: m_total = m_LFO + driftAmount*drift, and the resulting modulated delay position must be clamped to the valid delay range [8 samples, 8.25 seconds] by the engine's clamping helper so callers always receive a legal read position.\n\nReal-time rules (binding): no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, or buffer resizing in any process-path function. Allocate all state in prepare(double sampleRate, int maxBlockSize). Smooth the user depth and rate with the plan's domain rules: depth (a signed/linear seconds value) uses linear juce::SmoothedValue at 30 ms; rate (strictly positive) uses multiplicative smoothing (juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>) at 50 ms. Phase accumulators must wrap to avoid unbounded growth. Denormal safety is the caller's responsibility, but do not introduce denormal-prone recursive state without a flush.\n\nAPI shape: a class ModulationEngine with prepare, reset, setters for rate, depth, phase offset, drift amount, and bend exemption, plus a per-sample or per-channel query returning the modulation offset in samples and a helper that applies clamping to a base delay position. Keep the header self-contained and include only JUCE headers already used elsewhere in Source/DSP.\n\nDo not modify DelayVoice, CMakeLists.txt, or any other file; integration and build registration happen in task e.5. No artist or song names may appear anywhere in the source.",
+  "acceptance_criteria": [
+    "Source/DSP/ModulationEngine.h and Source/DSP/ModulationEngine.cpp exist and declare/define a ModulationEngine class with prepare, reset, and process-path accessors",
+    "ModulationEngine.cpp computes the LFO as A_effective * sin(2*pi*rate*n/Fs + phase) with rate clamped to [0.05, 5.0] Hz and user depth clamped to [0, 0.008] seconds",
+    "ModulationEngine.cpp computes maxRateDeviation = 2^(25/1200) - 1 and depthEffective = min(depthUser, maxRateDeviation/(2*pi*rateHz)), with a bend-exempt flag that bypasses the cap",
+    "ModulationEngine.cpp implements drift[n] = alphaDrift*drift[n-1] + (1-alphaDrift)*noise[n] with alphaDrift derived from a 0.08 Hz cutoff and the prepared sample rate, and combines m_total = m_LFO + driftAmount*drift",
+    "Modulated delay positions returned by ModulationEngine are clamped to [8 samples, 8.25 seconds]",
+    "No heap allocation, locking, file IO, or string construction occurs in ModulationEngine process-path functions; all state is allocated in prepare",
+    "cmake --build build --target ShredSpace_VST3 succeeds after the phase integration task registers the new sources",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/ModulationEngine.h",
+    "Source/DSP/ModulationEngine.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, Source/PluginEditor.h, or Source/PluginEditor.cpp",
+    "modify anything under JUCE/",
+    "add any new third-party dependency",
+    "allocate memory, lock, construct strings, or perform file IO inside process-path functions",
+    "use ordinary SmoothedValue for large delay-time transitions",
+    "document the 25-cent pitch cap as advice instead of enforcing it in code",
+    "add oversampling or pitch-shifting algorithms",
+    "include artist or song names in source or comments"
+  ],
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

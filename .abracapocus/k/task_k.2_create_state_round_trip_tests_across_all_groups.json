@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "task_id": "k.2",
+  "phase": "K",
+  "phase_id": "k",
+  "title": "Create state round trip tests across all groups",
+  "description": "Create tests/StateRoundTripTests.cpp implementing a juce::UnitTest that proves exact state round-trip fidelity, and register the new test source in CMakeLists.txt's existing unit-test console runner target.\n\nBefore editing, inspect:\n- Source/PluginProcessor.h and Source/PluginProcessor.cpp (getStateInformation / setStateInformation, the APVTS member, the schema version constant written into saved state, and how the active profile and scene are stored)\n- Source/ParameterLayout.h and Source/ParameterLayout.cpp (every APVTS parameter group, parameter IDs, ranges, and default values)\n- tests/ (existing juce::UnitTest files and the console runner main, for the exact registration idiom, test-name conventions, and how a processor instance is constructed in a test)\n- CMakeLists.txt (the unit-test runner target's source list and the add_test/ctest registration, so the new file is added the same way)\n\nRequired test behaviour:\n1. Use the built-in juce::UnitTest framework only. Catch2, GoogleTest, and every other third-party framework are forbidden; no new third-party dependency of any kind may be introduced.\n2. Construct a processor instance and set a NON-DEFAULT value on at least one parameter in EVERY APVTS parameter group defined in ParameterLayout. Choose values strictly inside each parameter's declared range and different from its default, so a silent failure to restore is detectable.\n3. Select a non-default profile and a non-default scene through the processor's message-thread recall path (never by calling audio-thread code directly).\n4. Serialize state with getStateInformation into a juce::MemoryBlock.\n5. Construct a FRESH processor instance and restore into it with setStateInformation from that MemoryBlock.\n6. Assert exact equality between the source and restored processor for: every parameter value that was set (compare raw APVTS values, using exact equality for discrete/choice/bool parameters and a tolerance no looser than 1.0e-6 for continuous float parameters), the active profile identity, the active scene identity, and the persisted schema version.\n7. Emit a distinct, named expect() assertion per parameter group so a failure identifies which group broke, and use beginTest sections separating parameter round-trip, profile/scene round-trip, and schema-version round-trip.\n8. Do not call processBlock, do not allocate on any audio thread, and do not add any GUI dependency.\n9. Register the test statically the same way the existing test files do, so the console runner picks it up and ctest executes it.\n\nIn CMakeLists.txt, make the minimal change only: add tests/StateRoundTripTests.cpp to the existing unit-test runner target's source list. Do not restructure targets, change compile options, alter plugin metadata, or add new targets.",
+  "acceptance_criteria": [
+    "tests/StateRoundTripTests.cpp exists and defines a juce::UnitTest subclass registered with a static instance",
+    "tests/StateRoundTripTests.cpp sets a non-default value in every APVTS parameter group defined in Source/ParameterLayout.cpp",
+    "tests/StateRoundTripTests.cpp round-trips state through getStateInformation and setStateInformation into a freshly constructed processor",
+    "tests/StateRoundTripTests.cpp asserts exact restoration of parameter values, active profile, active scene, and the persisted schema version, with a separate named expect() per parameter group",
+    "tests/StateRoundTripTests.cpp references no third-party test framework (no Catch2, no GoogleTest) and adds no new dependency",
+    "CMakeLists.txt lists tests/StateRoundTripTests.cpp in the existing unit-test console runner target's sources and adds no new target",
+    "cmake --preset linux-release configures successfully",
+    "cmake --build against the linux-release build directory compiles the unit-test runner target successfully",
+    "ctest --test-dir against the linux-release build directory --output-on-failure runs the state round-trip test and it passes, proving exact equality of restored parameter, profile, scene, and schema-version state rather than only that the file compiles",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/StateRoundTripTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, Source/ParameterLayout.h, or Source/ParameterLayout.cpp",
+    "modify any other file under tests/",
+    "modify scripts/validate_plugin.sh",
+    "modify CMakePresets.json",
+    "add Catch2, GoogleTest, or any other third-party test framework",
+    "add any new third-party dependency",
+    "add new CMake targets or change plugin metadata (name, vendor, version, manufacturer code, plugin code, bundle identifier, LV2 URI)",
+    "call processBlock or any audio-thread path from the test",
+    "weaken the assertions to inequality, range checks, or tolerances looser than 1.0e-6 for continuous parameters"
+  ],
+  "allowed_symbols": [
+    "StateRoundTripTests",
+    "runTest",
+    "beginTest",
+    "expect",
+    "expectEquals",
+    "expectWithinAbsoluteError"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the specific non-default value used for each parameter within its declared range",
+      "choose the non-default profile and scene selected for the round trip",
+      "choose beginTest section names and expect() failure messages"
+    ],
+    "forbidden": [
+      "change the state serialization format or the schema version constant",
+      "change parameter IDs, ranges, or defaults",
+      "introduce a new test framework or a new runner target",
+      "restructure CMakeLists.txt beyond adding the one source file"
+    ]
+  },
+  "dependencies": [
+    "k.1"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

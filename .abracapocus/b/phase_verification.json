@@ -1,0 +1,66 @@
+{
+  "verification": {
+    "checks": [
+      {
+        "name": "cmake_configure",
+        "command": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "build",
+          "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+        ]
+      },
+      {
+        "name": "build_vst3",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "--target",
+          "ShredSpace_VST3"
+        ]
+      },
+      {
+        "name": "build_lv2",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "--target",
+          "ShredSpace_LV2"
+        ]
+      },
+      {
+        "name": "build_standalone",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "--target",
+          "ShredSpace_Standalone"
+        ]
+      },
+      {
+        "name": "build_tests",
+        "command": [
+          "cmake",
+          "--build",
+          "build",
+          "--target",
+          "ShredSpaceTests"
+        ]
+      },
+      {
+        "name": "ctest_parameters",
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build",
+          "--output-on-failure"
+        ]
+      }
+    ]
+  }
+}

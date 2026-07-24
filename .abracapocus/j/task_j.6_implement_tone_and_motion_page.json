@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "task_id": "j.6",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Implement tone and motion page",
+  "description": "Create Source/GUI/ToneMotionPage.h and Source/GUI/ToneMotionPage.cpp implementing `class ToneMotionPage : public juce::Component`.\n\nControls: global filter controls (HPF and LPF frequency and slope), Presence Guard controls (threshold, amount, frequency), transient-softener controls (amount, time constants), saturation (drive, character), modulation rate and depth, drift, diffusion (amount, size), stereo behaviour (width, spread, correlation target), and the low-frequency mono crossover frequency.\n\nFrequency controls must use logarithmic/skewed ranges consistent with the declared `juce::NormalisableRange` in the parameter layout \u2014 read the range from the layout header rather than redefining it in the GUI. Display frequency in Hz and dB values in dB.\n\nThe page owns its own APVTS attachments as `std::unique_ptr` members. It performs no DSP and no audio-thread access.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterLayout.h (authoritative IDs, ranges, skews, and defaults for all tone and motion parameters)\n- Source/GUI/CustomLookAndFeel.h (shared colours)\n- Source/PluginProcessor.h (APVTS accessor)\n\nImplement `resized()` with a proportional layout grouping tone controls and motion controls into labelled sections. Do not register the files in CMakeLists.txt; j.8 owns that.",
+  "acceptance_criteria": [
+    "Source/GUI/ToneMotionPage.h declares class ToneMotionPage deriving from juce::Component",
+    "Source/GUI/ToneMotionPage.cpp creates controls for HPF, LPF, Presence Guard, transient softening, saturation, modulation rate, modulation depth, drift, diffusion, stereo behaviour, and the low-frequency mono crossover",
+    "Every parameter ID string used in Source/GUI/ToneMotionPage.cpp matches an ID declared in Source/Parameters/ParameterLayout.h",
+    "Source/GUI/ToneMotionPage.cpp does not redefine parameter ranges or skews locally; ranges come from the APVTS parameters via attachments",
+    "Source/GUI/ToneMotionPage.h holds all APVTS attachments as std::unique_ptr members owned by the page",
+    "Source/GUI/ToneMotionPage.cpp implements resized() with a proportional grouped layout",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/GUI/ToneMotionPage.h",
+    "Source/GUI/ToneMotionPage.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.*, Source/PluginEditor.*, Source/Parameters/*, or any DSP file",
+    "modify Source/GUI/CustomLookAndFeel.*, Source/GUI/MeterComponent.*, or any other page file",
+    "invent parameter ID strings or redefine parameter ranges in the GUI",
+    "add new third-party dependencies"
+  ],
+  "allowed_symbols": [
+    "ToneMotionPage",
+    "resized",
+    "paint"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose section grouping, labels, and control styles",
+      "choose value suffix and decimal formatting for Hz and dB readouts"
+    ],
+    "forbidden": [
+      "add or remove APVTS parameters",
+      "change filter or saturation DSP behaviour",
+      "define new NormalisableRange objects in the GUI"
+    ]
+  },
+  "dependencies": [
+    "j.3"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

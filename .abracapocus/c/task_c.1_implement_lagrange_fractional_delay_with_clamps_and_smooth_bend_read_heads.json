@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "task_id": "c.1",
+  "phase": "C",
+  "phase_id": "c",
+  "title": "Implement Lagrange fractional delay with clamps and smooth bend read heads",
+  "description": "Create Source/DSP/FractionalDelay.h and Source/DSP/FractionalDelay.cpp implementing a single-channel fractional delay line with multiple read heads.\n\nBefore editing, inspect:\n- CMakeLists.txt (to see the existing target and source layout; do NOT modify it in this task)\n- Source/DSP/ (existing DSP module style, include guards, namespace)\n- Source/PluginProcessor.h (only to match naming/namespace conventions)\n\nRequired implementation (restate these numbers exactly in code):\n1. Interpolation: third-order (4-point) Lagrange interpolation for fractional position mu in [0,1) with coefficients, verbatim:\n   L_minus1 = -mu*(mu-1)*(mu-2)/6\n   L_0      =  (mu+1)*(mu-1)*(mu-2)/2\n   L_1      = -(mu+1)*mu*(mu-2)/2\n   L_2      =  (mu+1)*mu*(mu-1)/6\n   The interpolated sample is L_minus1*x[i-1] + L_0*x[i] + L_1*x[i+1] + L_2*x[i+2] using the delay-line indexing convention documented in the header.\n2. Buffer sizing: prepare(double sampleRate, int maxBlockSize) allocates a circular buffer of ceil(8.25 * sampleRate) + 4 guard samples. This is the ONLY place memory is allocated. No allocation, resizing, locking, file IO, string construction, or exceptions in any per-sample or per-block processing function.\n3. Clamping: every final read position, after modulation and offsets, is clamped to [8.0 samples, 8.25 * sampleRate samples]. Provide a private clampReadPosition(double) used by every read path; no read path may bypass it.\n4. Read heads: support at least two simultaneous read heads so Smooth transitions can be rendered.\n5. Smooth mode (no intentional pitch bend): two read heads r_old at D_old and r_new at D_new combined by equal-power crossfade\n   r = cos(pi*lambda/2)*r_old + sin(pi*lambda/2)*r_new\n   with lambda ramping linearly 0 -> 1 over the glide time. Glide time range is 5 ms to 1000 ms, clamped. When lambda reaches 1 the old head is retired.\n6. Bend mode (intentional pitch bend): one read position ramped D[n] = D_start + lambda[n]*(D_target - D_start), with playback-rate factor p(t) = 1 - dD/dt so that decreasing delay raises pitch. Bend is exempt from any modulation pitch cap; document this in a comment.\n7. Bounded modulation: setModulationOffsetSamples(double) accepts a signed offset that is bounded to a documented maximum before being added to the base read position; the result still passes through clampReadPosition.\n8. reset() deterministically zeroes the buffer and all head state without reallocating.\n\nThe file must be standard C++20 only: include <cmath>, <vector>, <cstdint>, <algorithm> as needed. Do NOT include any JUCE header in these two files; this keeps the module independently compilable and unit-testable.",
+  "acceptance_criteria": [
+    "Source/DSP/FractionalDelay.h and Source/DSP/FractionalDelay.cpp exist",
+    "g++ -std=c++20 -fsyntax-only -I Source Source/DSP/FractionalDelay.cpp passes",
+    "FractionalDelay.cpp contains the four Lagrange coefficient expressions exactly as specified for mu in [0,1)",
+    "Every read path clamps the final read position to [8 samples, 8.25 * sampleRate samples] via a single shared clamp helper",
+    "Buffer memory is allocated only in prepare() and never resized, allocated, or freed in processing functions",
+    "Smooth mode implements r = cos(pi*lambda/2)*r_old + sin(pi*lambda/2)*r_new with lambda ramped over a glide time clamped to [5 ms, 1000 ms]",
+    "Bend mode implements D[n] = D_start + lambda[n]*(D_target - D_start) and documents p(t) = 1 - dD/dt",
+    "reset() zeroes buffer and head state without reallocating",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/FractionalDelay.h",
+    "Source/DSP/FractionalDelay.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "include any JUCE header in FractionalDelay.h or FractionalDelay.cpp",
+    "create or modify Source/DSP/DelayVoice.*, Source/DSP/FeedbackController.*, or Source/DSP/DelayTimeController.*",
+    "allocate, resize, or free memory outside prepare()",
+    "add any new third-party dependency",
+    "use locks, file IO, or string construction in processing functions"
+  ],
+  "allowed_symbols": [
+    "FractionalDelay",
+    "prepare",
+    "reset",
+    "write",
+    "readSample",
+    "setDelaySamples",
+    "startSmoothTransition",
+    "startBendTransition",
+    "setModulationOffsetSamples",
+    "clampReadPosition",
+    "lagrangeInterpolate",
+    "kMaxDelaySeconds",
+    "kMinDelaySamples"
+  ],
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

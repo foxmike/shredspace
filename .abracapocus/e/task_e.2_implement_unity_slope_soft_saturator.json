@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "task_id": "e.2",
+  "phase": "E",
+  "phase_id": "e",
+  "title": "Implement unity slope soft saturator",
+  "description": "Create Source/DSP/SoftSaturator.h and Source/DSP/SoftSaturator.cpp implementing the mild in-loop saturation stage for ShredSpace.\n\nBefore editing, inspect:\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (to see where the saturator will later be called, after LPF/Presence Guard/repeat transient softener and before diffusion)\n- Any existing Source/DSP/*.h module and match its namespace, pragma-once/header-guard style, include style, and naming conventions exactly\n- CMakeLists.txt (C++20 standard, JUCE modules available) but do not edit it\n\nRequired behavior (implement exactly these equations):\n1. Shaper: s_D(x) = tanh(D*x)/D. This form has unity small-signal slope, because d/dx [tanh(D*x)/D] at x = 0 equals 1 for any D > 0.\n2. Drive mapping: D = 1 + 4*s for the control s in [0, 1]. Clamp s to [0, 1] on entry.\n3. Blend: y = (1 - s)*x + s*s_D(x). At s = 0 the stage is exactly transparent (y == x, bit-for-bit for a pass-through path).\n4. Base-rate processing only. There is no oversampling in 1.0. Drive stays conservative: the maximum D is 5.\n5. Small-signal loop gain must not exceed unity: since |s_D'(0)| = 1 and the blend is convex, the small-signal slope of y with respect to x is exactly 1 for all s in [0, 1]. Do not add makeup gain, do not add asymmetry, and do not add a DC offset that would break this property.\n6. Output must remain finite for any finite input, including large inputs (tanh saturates).\n\nAPI shape: a class SoftSaturator with prepare(double sampleRate, int maxBlockSize), reset(), setAmount(float s), a per-sample processSample(float x) returning y, and a per-channel block helper. Smooth the amount control s with a linear juce::SmoothedValue at 30 ms (s is a normalized control), initialized in prepare.\n\nReal-time rules (binding): no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, or buffer resizing in the process path; all state allocated in prepare. Use std::tanh from <cmath>. Keep the stage stateless apart from the smoother so that reset() fully restores initial behavior.\n\nDo not modify DelayVoice, CMakeLists.txt, or any other file; integration and build registration happen in task e.5. No artist or song names may appear anywhere in the source.",
+  "acceptance_criteria": [
+    "Source/DSP/SoftSaturator.h and Source/DSP/SoftSaturator.cpp exist and declare/define a SoftSaturator class with prepare, reset, setAmount, and a per-sample process function",
+    "SoftSaturator.cpp implements s_D(x) = tanh(D*x)/D with D = 1 + 4*s and blend y = (1-s)*x + s*s_D(x), with s clamped to [0,1]",
+    "At amount s = 0 the saturator output equals its input (transparent pass-through)",
+    "The small-signal slope at x = 0 is unity for every amount value, so in-loop small-signal gain never exceeds unity",
+    "SoftSaturator output is finite for large finite inputs and contains no makeup gain, oversampling, or added DC offset",
+    "No heap allocation, locking, file IO, or string construction occurs in SoftSaturator process-path functions; all state is allocated in prepare",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/SoftSaturator.h",
+    "Source/DSP/SoftSaturator.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/DSP/ModulationEngine.h, Source/DSP/ModulationEngine.cpp, Source/DSP/ShortDiffuser.h, Source/DSP/ShortDiffuser.cpp, Source/DSP/StereoProcessor.h, or Source/DSP/StereoProcessor.cpp",
+    "modify anything under JUCE/",
+    "add any new third-party dependency",
+    "add oversampling, upsampling, or anti-alias filtering to the saturator",
+    "add makeup gain, asymmetric clipping, or DC offset that breaks unity small-signal slope",
+    "allocate memory, lock, construct strings, or perform file IO inside process-path functions",
+    "include artist or song names in source or comments"
+  ],
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

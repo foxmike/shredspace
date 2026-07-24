@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "task_id": "i.3",
+  "phase": "I",
+  "phase_id": "i",
+  "title": "Implement pod double buffer profile snapshot handoff",
+  "description": "Create ONLY Source/Profiles/ProfileSnapshot.h and Source/Profiles/ProfileSnapshot.cpp.\n\nBefore editing, inspect:\n- Source/Profiles/ProfileSchema.h for ProfileDocument and kMacroNames (task i.1).\n- Source/Profiles/ProfileManager.h for the catalog access used by the publishing side (task i.2).\n- Source/Parameters/MacroEngine.h for the macro destination table shape the audio thread consumes (task i.4).\nDo NOT modify any of those files. Never modify anything under JUCE/.\n\nImplement the binding cross-thread contract exactly:\n1. Define a POD struct ProfileSnapshotData containing only trivially copyable scalars and fixed-size arrays: base parameter values (fixed-size float array sized by a compile-time constant kMaxSnapshotParameters), macro destination tables (kMacroCount == 8 by kMaxDestinationsPerMacro entries of {int destinationIndex; float deltaMin; float deltaMax; float curve;}), scene numeric targets (4 scenes by 8 macro targets plus mixTarget, routingTarget as int, holdBehaviour as int). static_assert(std::is_trivially_copyable_v<ProfileSnapshotData>) and static_assert(std::is_standard_layout_v<ProfileSnapshotData>).\n2. NO juce::String, no std::string, no pointer to heap data, no tags, no filenames, and no profile_name inside ProfileSnapshotData. Strings and metadata must never enter the snapshot; add a static_assert-backed comment stating this.\n3. ProfileSnapshotHandoff owns exactly TWO preallocated ProfileSnapshotData instances as a member array (no heap allocation after construction), plus std::atomic<int> activeIndex and std::atomic<std::uint32_t> generation.\n4. publish(const ProfileSnapshotData&) is message-thread only: it writes into the inactive slot, then stores the new activeIndex with std::memory_order_release, then increments generation with std::memory_order_release.\n5. acquire() is audio-thread safe: it loads generation with std::memory_order_acquire, loads activeIndex with std::memory_order_acquire, and returns a const reference to the active slot. It performs no allocation, no locking, no destruction of heap-owned objects, and no unbounded loops.\n6. std::atomic<std::shared_ptr> is forbidden anywhere in this file. No mutex, no juce::CriticalSection, no juce::SpinLock.\n7. Provide buildSnapshot(const ProfileDocument&, const juce::StringArray& parameterIds, ProfileSnapshotData& out) as a message-thread helper that fills the POD from the validated document, dropping anything that does not fit the fixed capacities rather than resizing.\n\nNo artist or song name may appear in any comment, string, or identifier.",
+  "acceptance_criteria": [
+    "Source/Profiles/ProfileSnapshot.h and Source/Profiles/ProfileSnapshot.cpp exist and declare ProfileSnapshotData, ProfileSnapshotHandoff, publish, acquire, and buildSnapshot",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_core=1 Source/Profiles/ProfileSnapshot.cpp passes",
+    "ProfileSnapshot.h contains static_assert(std::is_trivially_copyable_v<ProfileSnapshotData>) and static_assert(std::is_standard_layout_v<ProfileSnapshotData>)",
+    "ProfileSnapshotHandoff holds exactly two preallocated ProfileSnapshotData slots and allocates no memory outside its constructor",
+    "publish uses std::memory_order_release for activeIndex and generation, and acquire uses std::memory_order_acquire for both",
+    "Neither file contains std::atomic<std::shared_ptr>, std::mutex, juce::CriticalSection, juce::SpinLock, juce::String members inside ProfileSnapshotData, or std::string",
+    "No artist or song name appears in either file",
+    "No file outside this task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Profiles/ProfileSnapshot.h",
+    "Source/Profiles/ProfileSnapshot.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Profiles/ProfileSchema.h, Source/Profiles/ProfileSchema.cpp, Source/Profiles/ProfileManager.h, or Source/Profiles/ProfileManager.cpp",
+    "modify Source/Parameters/MacroEngine.h or Source/Parameters/MacroEngine.cpp",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "use std::atomic<std::shared_ptr>",
+    "use any lock, mutex, juce::CriticalSection, or juce::SpinLock",
+    "store strings, tags, or filenames in the snapshot",
+    "allocate or free memory in publish or acquire",
+    "add any new third-party dependency",
+    "include artist or song names in comments, strings, or identifiers"
+  ],
+  "allowed_symbols": [
+    "ProfileSnapshotData",
+    "ProfileSnapshotHandoff",
+    "ProfileSnapshotHandoff::publish",
+    "ProfileSnapshotHandoff::acquire",
+    "ProfileSnapshotHandoff::currentGeneration",
+    "buildSnapshot",
+    "kMaxSnapshotParameters",
+    "kMaxDestinationsPerMacro",
+    "kMacroCount"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose concrete values for kMaxSnapshotParameters and kMaxDestinationsPerMacro",
+      "choose field ordering inside the POD",
+      "add local static helpers inside ProfileSnapshot.cpp"
+    ],
+    "forbidden": [
+      "introduce a lock-free queue library or juce::AbstractFifo for this handoff",
+      "change the schema or the manager",
+      "add a third snapshot slot or dynamic slot count",
+      "make the audio thread parse or validate profiles"
+    ]
+  },
+  "dependencies": [
+    "i.2",
+    "i.4"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

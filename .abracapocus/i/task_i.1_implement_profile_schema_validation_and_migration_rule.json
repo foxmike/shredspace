@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "i.1",
+  "phase": "I",
+  "phase_id": "i",
+  "title": "Implement profile schema validation and migration rule",
+  "description": "Create ONLY Source/Profiles/ProfileSchema.h and Source/Profiles/ProfileSchema.cpp for the ShredSpace profile format.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterLayout.h and Source/Parameters/ParameterLayout.cpp (frozen in phase b) for the authoritative parameter IDs, ranges, and defaults. Do NOT modify them.\n- CMakeLists.txt (read only) to learn the include conventions and the JUCE module set already linked. Do NOT modify CMakeLists.txt in this task; task i.6 owns it.\n- JUCE/modules/juce_core/juce_core.h for juce::var, juce::JSON, juce::DynamicObject. Never modify anything under JUCE/.\n\nDefine a plain data struct ProfileDocument holding exactly these fields parsed from JSON: schema_version (int), product_version (String), profile_name (String), author (String), description (String), base_parameter_values (map from parameter ID string to float), macro_mapping (per-macro list of destination entries: destination parameter ID, delta_min, delta_max, curve with curve > 0 and default 1.0), scene_values (four scenes A/B/C/D, each holding eight macro targets, a Mix target, a routing target, and a Hold behavior enum), and tags (StringArray).\n\nDefine ProfileValidationResult carrying an ok flag, a list of human-readable errors, and a list of migration notes. Implement ProfileSchema::parse(const juce::var&) returning ProfileDocument plus ProfileValidationResult, and ProfileSchema::validate(const ProfileDocument&).\n\nBinding validation rules to implement exactly:\n1. kCurrentSchemaVersion = 1. A document whose schema_version is missing, non-integer, less than 1, or greater than kCurrentSchemaVersion is rejected (ok == false).\n2. Every parameter ID referenced by base_parameter_values, by any macro_mapping destination, and by any scene routing/Mix target must exist in the frozen parameter layout. Existence is checked by querying the parameter layout ID list passed in as a const juce::StringArray& argument; ProfileSchema must not construct an AudioProcessorValueTreeState itself.\n3. Migration rule for unknown IDs: an unknown parameter ID is DROPPED from the parsed document, is NOT an error, and appends one migration note of the form \"dropped unknown parameter id: <id>\"; the document remains ok. An unknown ID that would leave a macro with zero destinations drops that macro's mapping to an empty table (still ok).\n4. Malformed input (non-object root, non-numeric where numeric is required, curve <= 0, delta_min/delta_max not finite, fewer or more than four scenes, fewer or more than eight macro entries when macro_mapping is present) must fail safely: return ok == false with a non-empty error list and a default-constructed ProfileDocument. Never throw, never assert, never partially publish.\n5. All values loaded into base_parameter_values are clamped to the frozen parameter range for that ID before being stored.\n6. Nothing in this file may be called from the audio thread; do not add any real-time entry points, and do not allocate on behalf of an audio-thread caller.\n\nThe eight macro names are exactly TIME, SPACE, DEFINITION, BLOOM, TAIL, FOCUS, WIDTH, CHARACTER, in that order, exposed as a constexpr array kMacroNames.\n\nNo artist or song name may appear in any comment, string, or identifier.",
+  "acceptance_criteria": [
+    "Source/Profiles/ProfileSchema.h and Source/Profiles/ProfileSchema.cpp exist and declare ProfileDocument, ProfileValidationResult, ProfileSchema::parse, ProfileSchema::validate, kCurrentSchemaVersion, and kMacroNames",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_core=1 Source/Profiles/ProfileSchema.cpp passes",
+    "kCurrentSchemaVersion is defined and a schema_version outside [1, kCurrentSchemaVersion] returns ok == false",
+    "An unknown parameter ID is dropped and recorded as a migration note without setting ok to false",
+    "Malformed input returns ok == false with a non-empty error list and a default-constructed ProfileDocument, with no throw and no assert",
+    "kMacroNames contains exactly TIME, SPACE, DEFINITION, BLOOM, TAIL, FOCUS, WIDTH, CHARACTER in that order",
+    "No artist or song name appears in either file",
+    "No file outside this task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Profiles/ProfileSchema.h",
+    "Source/Profiles/ProfileSchema.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "modify Source/Parameters/ParameterLayout.h or Source/Parameters/ParameterLayout.cpp",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "add any new third-party dependency",
+    "add Catch2, GoogleTest, or any non-juce::UnitTest test framework",
+    "call setValueNotifyingHost from this module",
+    "add file IO or JSON parsing entry points intended for the audio thread",
+    "include artist or song names in comments, strings, or identifiers"
+  ],
+  "allowed_symbols": [
+    "ProfileDocument",
+    "ProfileValidationResult",
+    "ProfileSchema",
+    "ProfileSchema::parse",
+    "ProfileSchema::validate",
+    "ProfileMacroMappingEntry",
+    "ProfileSceneValues",
+    "kCurrentSchemaVersion",
+    "kMacroNames"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose internal container types for the parsed document",
+      "choose error message wording within the specified formats",
+      "add local static helpers inside ProfileSchema.cpp"
+    ],
+    "forbidden": [
+      "introduce a new JSON library",
+      "change the frozen parameter layout or its IDs",
+      "define the real-time snapshot format here",
+      "perform file IO in this module"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

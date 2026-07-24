@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "task_id": "b.1",
+  "phase": "B",
+  "phase_id": "b",
+  "title": "Create frozen parameter ID taxonomy with schema version",
+  "description": "Create Source/Parameters/ParameterIDs.h ONLY. This file freezes every automatable parameter identifier for ShredSpace 1.0 permanently; IDs may never be renamed after this task because host automation and preset recall bind to them.\n\nBefore editing, inspect:\n- CMakeLists.txt (product identity: project ShredSpace, vendor nSpace Systems, version 1.0.0, manufacturer code NSPC, plugin code ShSp)\n- Source/PluginProcessor.h and Source/PluginProcessor.cpp (existing skeleton from phase a)\n- The existing Source/ directory layout; create Source/Parameters/ if it does not exist\n\nFILE CONTENT REQUIREMENTS:\n1. Header guard #pragma once. This header MUST be pure C++20 with NO JUCE include and NO third-party include. Use only <string_view> if needed.\n2. Declare namespace shredspace::paramids. Every ID is declared as `inline constexpr const char* kName = \"ID_STRING\";`. The ID string is the authoritative frozen value.\n3. Declare `inline constexpr int kStateSchemaVersion = 1;`, `inline constexpr const char* kStateRootType = \"ShredSpaceState\";`, `inline constexpr const char* kApvtsType = \"PARAMETERS\";`, and `inline constexpr const char* kSchemaVersionProperty = \"schemaVersion\";`.\n4. Group the constants with comment banners in this exact order: GLOBAL, PERF, TIME, STEREO, SCENE, VOICE_A, VOICE_B, INTEL.\n\nEXACT ID STRINGS TO DECLARE (transcribe literally, do not invent, rename, reorder within group, or omit):\n\nGLOBAL: GLOBAL_INPUT_GAIN, GLOBAL_OUTPUT_GAIN, GLOBAL_MIX, GLOBAL_BYPASS, GLOBAL_BYPASS_MODE, GLOBAL_MIX_MODE, GLOBAL_SPILLOVER, GLOBAL_SAFETY_LIMITER\n\nPERF: PERF_MACRO_TIME, PERF_MACRO_SPACE, PERF_MACRO_DEFINITION, PERF_MACRO_BLOOM, PERF_MACRO_TAIL, PERF_MACRO_FOCUS, PERF_MACRO_WIDTH, PERF_MACRO_CHARACTER, PERF_TAP, PERF_HOLD, PERF_HOLD_MODE, PERF_ADAPTIVE_MODE, PERF_ROUTING, PERF_ROUTING_CASCADE\n\nTIME: TIME_MODE, TIME_SYNC_DIVISION, TIME_GLIDE\n\nSTEREO: STEREO_LF_MONO, STEREO_LF_MONO_FREQ\n\nSCENE: SCENE_SELECT, SCENE_MORPH\n\nVOICE_A (and the identical list again with the VOICE_B_ prefix): VOICE_A_ENABLE, VOICE_A_TIME_RATIO, VOICE_A_FINE_OFFSET, VOICE_A_LEVEL, VOICE_A_TAIL_SCALE, VOICE_A_ADAPTIVE_ROLE, VOICE_A_PAN, VOICE_A_WIDTH, VOICE_A_STEREO_OFFSET, VOICE_A_CROSS_FEEDBACK, VOICE_A_MOD_PHASE, VOICE_A_HPF, VOICE_A_LPF, VOICE_A_PRESENCE_FREQ, VOICE_A_PRESENCE_GUARD, VOICE_A_ATTACK_SOFTEN, VOICE_A_MOD_RATE, VOICE_A_MOD_DEPTH, VOICE_A_DRIFT, VOICE_A_DIFFUSION, VOICE_A_SATURATION (21 IDs per voice, 42 total)\n\nINTEL detector: INTEL_SENSITIVITY, INTEL_INPUT_GATE, INTEL_DENSITY_WINDOW, INTEL_DENSITY_START, INTEL_DENSITY_FULL, INTEL_SUSTAIN_START, INTEL_SUSTAIN_FULL, INTEL_PHRASE_GAP\nINTEL contraction: INTEL_CONTRACTION_ATTACK, INTEL_CONTRACTION_RELEASE, INTEL_WET_REDUCTION, INTEL_TAIL_REDUCTION, INTEL_TONE_DARKENING, INTEL_WIDTH_REDUCTION, INTEL_ATTACK_SOFTEN_INCREASE\nINTEL bloom: INTEL_BLOOM_RISE, INTEL_BLOOM_HOLD, INTEL_BLOOM_RELEASE, INTEL_WET_LIFT, INTEL_TAIL_EXPANSION, INTEL_TONE_OPENING, INTEL_WIDTH_EXPANSION, INTEL_DIFFUSION_INCREASE\nINTEL shared: INTEL_TRANSIENT_CROSSOVER\n\n5. Add a file-level comment stating that the following internal state is FORBIDDEN from ever appearing in APVTS or in this header: detector running means and deviations, FFT history, onset timestamps, runtime activity/density/sustain/phrase-gap values, macro destination tables, scene names, profile names/descriptions/tags, migration metadata, telemetry values, safety intervention state, delay-buffer contents, resampler state.\n6. No artist or song names anywhere in the file.\n\nDo not create ParameterLayout.h/.cpp, do not touch CMakeLists.txt, do not touch PluginProcessor.",
+  "acceptance_criteria": [
+    "Source/Parameters/ParameterIDs.h exists and declares namespace shredspace::paramids",
+    "g++ -std=c++20 -fsyntax-only -x c++ Source/Parameters/ParameterIDs.h passes with no errors",
+    "Source/Parameters/ParameterIDs.h contains all 8 GLOBAL_, 14 PERF_, 3 TIME_, 2 STEREO_, 2 SCENE_, 21 VOICE_A_, 21 VOICE_B_, and 23 INTEL_ identifier string literals listed in this task description",
+    "Source/Parameters/ParameterIDs.h declares kStateSchemaVersion, kStateRootType, kApvtsType, and kSchemaVersionProperty",
+    "Source/Parameters/ParameterIDs.h contains no #include of any JUCE header and no third-party include",
+    "No file outside Source/Parameters/ParameterIDs.h is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Parameters/ParameterIDs.h"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt",
+    "modify CMakePresets.json",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "create Source/Parameters/ParameterLayout.h or Source/Parameters/ParameterLayout.cpp",
+    "modify anything under JUCE/",
+    "add any third-party dependency",
+    "include any JUCE header in ParameterIDs.h",
+    "invent, rename, abbreviate, or omit any parameter ID string listed in the task description",
+    "declare constants for internal state such as detector means, FFT history, onset timestamps, scene names, or profile metadata"
+  ],
+  "allowed_symbols": [
+    "shredspace::paramids",
+    "kStateSchemaVersion",
+    "kStateRootType",
+    "kApvtsType",
+    "kSchemaVersionProperty"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose comment banner formatting",
+      "choose constant naming style for the C++ identifiers (the ID string literals are fixed)"
+    ],
+    "forbidden": [
+      "change any parameter ID string literal",
+      "introduce an enum-based or macro-based ID registry",
+      "add parameters not listed in the task description"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1500,
+  "verification_commands": []
+}

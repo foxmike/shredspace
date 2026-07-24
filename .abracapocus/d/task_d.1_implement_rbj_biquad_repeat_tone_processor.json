@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "task_id": "d.1",
+  "phase": "D",
+  "phase_id": "d",
+  "title": "Implement RBJ biquad repeat tone processor",
+  "description": "Create Source/DSP/RepeatToneProcessor.h and Source/DSP/RepeatToneProcessor.cpp implementing the repeat tone chain's RBJ biquad filters (low-pass, high-pass, peaking) used inside each delay voice's feedback loop.\n\nBefore editing, inspect:\n- CMakeLists.txt (target name, Source/DSP source list, C++20 standard, JUCE module linkage)\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (existing voice structure, prepare/process signatures, sample rate and max block size handling conventions)\n- Any existing Source/DSP/*.h from earlier phases for the house style of prepare(double sampleRate, int maxBlockSize), reset(), and per-sample process methods\n\nRequired design:\n- Define a class RepeatToneProcessor and a supporting struct BiquadCoefficients (double b0,b1,b2,a1,a2 already normalized by a0) plus an internal per-channel state struct BiquadState (transposed direct form II: two double state variables).\n- Shared RBJ intermediates, computed in double: omega0 = 2*pi*f0/Fs; alpha = sin(omega0)/(2*Q) with Q = 0.70710678.\n- Low-pass: b0=(1-cos(omega0))/2, b1=1-cos(omega0), b2=b0, a0=1+alpha, a1=-2*cos(omega0), a2=1-alpha.\n- High-pass: b0=(1+cos(omega0))/2, b1=-(1+cos(omega0)), b2=b0, a0=1+alpha, a1=-2*cos(omega0), a2=1-alpha.\n- Peaking: A=pow(10.0, G_dB/40.0), b0=1+alpha*A, b1=-2*cos(omega0), b2=1-alpha*A, a0=1+alpha/A, a1=-2*cos(omega0), a2=1-alpha/A.\n- All coefficients divided by a0 before storage. Coefficient math in double; audio samples processed as float.\n- Cutoff frequencies are smoothed multiplicatively (juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative>, 50 ms) because they are strictly positive; peaking gain is smoothed in dB with a linear SmoothedValue (20 ms) and converted only afterward via A = 10^(G_dB/40).\n- Coefficients are recomputed at a bounded control rate: define a compile-time constant kControlRateDivider (for example 32 samples) and recompute at most once per that many samples, or once per block boundary, never per sample. Never linearly interpolate between unrelated coefficient sets; interpolate the parameters, then recompute coefficients.\n- Clamp f0 to [20.0, min(20000.0, 0.45*Fs)] before computing omega0 so the filter stays stable at every supported sample rate.\n\nReal-time contract (binding): no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, buffer resizing, or coefficient-object allocation inside any processing method. All state and storage are fixed-size members sized for the maximum channel count (2) and allocated/reset in prepare(). Provide juce::ScopedNoDenormals only in processor-level entry points, not inside per-sample helpers.\n\nPublic API to provide (exact names required):\n- void prepare (double sampleRate, int maxBlockSize, int numChannels)\n- void reset()\n- void setHighPassFrequency (float hz)\n- void setLowPassFrequency (float hz)\n- void setPeakingParameters (float hz, float gainDb, float q)\n- float processHighPassSample (int channel, float x)\n- float processLowPassSample (int channel, float x)\n- float processPeakingSample (int channel, float x)\n- void updateCoefficients() (advances smoothing by the control-rate block and recomputes)\n- static BiquadCoefficients makeLowPass (double sampleRate, double frequency, double q)\n- static BiquadCoefficients makeHighPass (double sampleRate, double frequency, double q)\n- static BiquadCoefficients makePeaking (double sampleRate, double frequency, double q, double gainDb)\n- static double magnitudeAt (const BiquadCoefficients& c, double sampleRate, double frequency) returning |H(e^{jw})| so tests can check responses without reimplementing the transfer function.\n\nDo not modify DelayVoice or CMakeLists.txt in this task; integration and source registration happen in d.4.",
+  "acceptance_criteria": [
+    "Source/DSP/RepeatToneProcessor.h declares class RepeatToneProcessor, struct BiquadCoefficients, and the static factories makeLowPass, makeHighPass, makePeaking, plus static magnitudeAt",
+    "Source/DSP/RepeatToneProcessor.cpp implements RBJ low-pass, high-pass, and peaking coefficient formulas exactly as specified, computed in double and normalized by a0",
+    "Cutoff frequency uses multiplicative smoothing and peaking gain is smoothed in dB then converted with A = 10^(G_dB/40)",
+    "Coefficients are recomputed at a bounded control rate via updateCoefficients(), never once per sample",
+    "No heap allocation, locks, file IO, string construction, or buffer resizing appears in any per-sample or per-block processing method in Source/DSP/RepeatToneProcessor.cpp",
+    "g++ -std=c++20 -fsyntax-only -I JUCE/modules -I Source Source/DSP/RepeatToneProcessor.cpp succeeds, or the file compiles as part of the existing CMake target once registered in d.4",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/RepeatToneProcessor.h",
+    "Source/DSP/RepeatToneProcessor.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, Source/PluginEditor.h, or Source/PluginEditor.cpp",
+    "add any new third-party dependency",
+    "use Catch2, GoogleTest, or any non-juce::UnitTest test framework",
+    "allocate memory, lock, construct strings, or resize buffers inside processing methods",
+    "linearly interpolate between unrelated biquad coefficient sets",
+    "recompute biquad coefficients once per sample",
+    "reference artist or song names in any source file"
+  ],
+  "allowed_symbols": [
+    "RepeatToneProcessor",
+    "BiquadCoefficients",
+    "BiquadState",
+    "prepare",
+    "reset",
+    "setHighPassFrequency",
+    "setLowPassFrequency",
+    "setPeakingParameters",
+    "processHighPassSample",
+    "processLowPassSample",
+    "processPeakingSample",
+    "updateCoefficients",
+    "makeLowPass",
+    "makeHighPass",
+    "makePeaking",
+    "magnitudeAt",
+    "kControlRateDivider"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose transposed direct form II biquad state layout",
+      "choose the exact control-rate divider constant",
+      "choose internal member naming and header include order"
+    ],
+    "forbidden": [
+      "introduce a different filter design method than RBJ",
+      "change DelayVoice or plugin processor interfaces",
+      "add a new DSP framework or third-party library",
+      "move filter coefficient math to float precision"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "task_id": "j.5",
+  "phase": "J",
+  "phase_id": "j",
+  "title": "Implement voices page",
+  "description": "Create Source/GUI/VoicesPage.h and Source/GUI/VoicesPage.cpp implementing `class VoicesPage : public juce::Component` with complete expert editing for Voice A and Voice B.\n\nPer-voice controls (identical set for A and B, laid out as two columns or two grouped panels): enable, time ratio, fine offset, level, tail scale, adaptive role, pan, width, stereo offset, cross-feedback, HPF frequency, LPF frequency, Presence Guard, transient softening, modulation, drift, diffusion, saturation.\n\nBuild the per-voice control set through a small private helper struct so Voice A and Voice B share construction code, with parameter IDs supplied per voice from Source/Parameters/ParameterLayout.h. Use the exact declared ID strings; do not construct IDs by ad-hoc string concatenation unless the layout header itself exposes a helper for that.\n\nThe page owns its own APVTS attachments as `std::unique_ptr` members. GUI code never touches the audio thread and reads no DSP state; display-only values must come from TelemetryState if needed.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterLayout.h (authoritative per-voice parameter IDs and their ranges/defaults)\n- Source/GUI/CustomLookAndFeel.h (shared colours)\n- Source/PluginProcessor.h (APVTS accessor)\n\nImplement `resized()` with a proportional layout that remains usable in a resizable editor. Do not register the files in CMakeLists.txt; j.8 owns that.",
+  "acceptance_criteria": [
+    "Source/GUI/VoicesPage.h declares class VoicesPage deriving from juce::Component",
+    "Source/GUI/VoicesPage.cpp creates controls for enable, time ratio, fine offset, level, tail scale, adaptive role, pan, width, stereo offset, cross-feedback, HPF, LPF, Presence Guard, transient softening, modulation, drift, diffusion, and saturation for both Voice A and Voice B",
+    "Voice A and Voice B controls are built through a shared private helper rather than duplicated verbatim twice",
+    "Every parameter ID string used in Source/GUI/VoicesPage.cpp matches an ID declared in Source/Parameters/ParameterLayout.h",
+    "Source/GUI/VoicesPage.h holds all APVTS attachments as std::unique_ptr members owned by the page",
+    "Source/GUI/VoicesPage.cpp implements resized() using a proportional layout and no fixed absolute window size",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/GUI/VoicesPage.h",
+    "Source/GUI/VoicesPage.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.*, Source/PluginEditor.*, Source/Parameters/*, or any DSP file",
+    "modify Source/GUI/CustomLookAndFeel.*, Source/GUI/MeterComponent.*, or any other page file",
+    "invent parameter ID strings not present in Source/Parameters/ParameterLayout.h",
+    "read DSP or audio-thread state directly from the GUI",
+    "add new third-party dependencies"
+  ],
+  "allowed_symbols": [
+    "VoicesPage",
+    "resized",
+    "paint"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the per-voice helper struct shape and layout grouping",
+      "choose control styles and label text"
+    ],
+    "forbidden": [
+      "add or remove APVTS parameters",
+      "change voice DSP behaviour or defaults",
+      "introduce a new attachment mechanism"
+    ]
+  },
+  "dependencies": [
+    "j.3"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

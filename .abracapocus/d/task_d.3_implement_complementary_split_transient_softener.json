@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "task_id": "d.3",
+  "phase": "D",
+  "phase_id": "d",
+  "title": "Implement complementary split transient softener",
+  "description": "Create Source/DSP/RepeatTransientSoftener.h and Source/DSP/RepeatTransientSoftener.cpp implementing the repeat transient softener that rounds pick attacks in the feedback loop without coloring the signal at zero amount.\n\nBefore editing, inspect:\n- Source/DSP/RepeatToneProcessor.h (produced by d.1; reuse its RBJ high-pass biquad rather than duplicating the coefficient math)\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (prepare/reset/process conventions, channel count handling)\n\nRequired design (the complementary-subtraction identity is binding):\n- Extract the high band with a single RBJ high-pass: z_high = HPF(z). Derive the low band by subtraction: z_low = z - z_high. This guarantees exact reconstruction at unity gain. Do NOT substitute a Linkwitz-Riley or any other crossover pair without the subtraction identity; a two-independent-filter split is wrong for this task.\n- Crossover default 2500 Hz, expert range 1000 Hz to 6000 Hz, clamped on set.\n- Envelopes on abs(z_high): fast envelope tau = 1.5 ms, slow envelope tau = 35 ms, each with alpha = exp(-1.0/(tau*Fs)), computed once in prepare() and on sample-rate change only.\n- transient = max(0.0f, (fast - slow) / (slow + epsilon)).\n- attenuation_dB = -maxAttenuationDb * clamp(transient, 0, 1); gain = 10^(attenuation_dB/20), applied ONLY to the high band.\n- Output: z_low + gain * z_high. When the Attack Softening amount is zero, maxAttenuationDb is zero, gain is exactly 1, and the output must equal the input to within floating-point tolerance.\n- Attack Softening 0..100% maps linearly to 0..12 dB of maximum high-band attenuation; provide void setAmountPercent (float percent) performing that mapping with clamping to [0, 100].\n\nReal-time contract (binding): no heap allocation, locks, file IO, string construction, GUI calls, buffer resizing, or coefficient-object allocation inside processing methods. Per-channel state is fixed-size and reset in prepare(). Crossover frequency uses multiplicative smoothing (strictly positive) with high-pass coefficients recomputed only at the bounded control rate in updateCoefficients().\n\nPublic API to provide (exact names required):\n- void prepare (double sampleRate, int maxBlockSize, int numChannels)\n- void reset()\n- void setCrossoverFrequency (float hz)\n- void setAmountPercent (float percent)\n- void setMaxAttenuationDb (float db)\n- float processSample (int channel, float x)\n- void updateCoefficients()\n- float getCurrentAttenuationDb (int channel) const (for tests and telemetry only)\n- static float computeAttenuationDb (float fastEnv, float slowEnv, float maxAttenuationDb) implementing the transient ratio and mapping as a pure function so tests can verify it directly.\n\nDo not modify DelayVoice or CMakeLists.txt in this task; integration and source registration happen in d.4.",
+  "acceptance_criteria": [
+    "Source/DSP/RepeatTransientSoftener.h declares class RepeatTransientSoftener with prepare, reset, setCrossoverFrequency, setAmountPercent, setMaxAttenuationDb, processSample, updateCoefficients, getCurrentAttenuationDb, and static computeAttenuationDb",
+    "Source/DSP/RepeatTransientSoftener.cpp derives the low band by subtraction (z_low = z - z_high) from a single RBJ high-pass, and never uses two independent crossover filters",
+    "Envelope coefficients use alpha = exp(-1/(tau*Fs)) with tau 1.5 ms fast and 35 ms slow, computed in prepare() rather than per sample",
+    "computeAttenuationDb implements transient = max(0, (fast - slow)/(slow + epsilon)) and attenuation_dB = -maxAttenuationDb * clamp(transient, 0, 1)",
+    "The computed gain 10^(attenuation_dB/20) is applied only to the high band, with output z_low + gain*z_high",
+    "setAmountPercent maps 0..100 percent to 0..12 dB maximum high-band attenuation and clamps out-of-range input",
+    "Crossover frequency is clamped to 1000..6000 Hz with a 2500 Hz default and uses multiplicative smoothing",
+    "No heap allocation, locks, file IO, string construction, or buffer resizing appears in any processing method in Source/DSP/RepeatTransientSoftener.cpp",
+    "g++ -std=c++20 -fsyntax-only -I JUCE/modules -I Source Source/DSP/RepeatTransientSoftener.cpp succeeds, or the file compiles as part of the existing CMake target once registered in d.4",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/RepeatTransientSoftener.h",
+    "Source/DSP/RepeatTransientSoftener.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/RepeatToneProcessor.h or Source/DSP/RepeatToneProcessor.cpp",
+    "modify Source/DSP/PresenceGuard.h or Source/DSP/PresenceGuard.cpp",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginProcessor.* or Source/PluginEditor.*",
+    "replace the complementary subtraction split with an independent crossover filter pair",
+    "apply the computed gain to the full-band or low-band signal",
+    "add any new third-party dependency",
+    "allocate memory, lock, or resize buffers inside processing methods",
+    "reference artist or song names in any source file"
+  ],
+  "allowed_symbols": [
+    "RepeatTransientSoftener",
+    "prepare",
+    "reset",
+    "setCrossoverFrequency",
+    "setAmountPercent",
+    "setMaxAttenuationDb",
+    "processSample",
+    "updateCoefficients",
+    "getCurrentAttenuationDb",
+    "computeAttenuationDb"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the epsilon constant value",
+      "choose internal per-channel envelope state layout",
+      "choose whether the high-pass state is stored in this class or delegated to a RepeatToneProcessor instance member"
+    ],
+    "forbidden": [
+      "introduce a Linkwitz-Riley or other non-subtractive crossover",
+      "introduce lookahead or block-based transient detection",
+      "change DelayVoice or plugin processor interfaces",
+      "add a new DSP framework or third-party library"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

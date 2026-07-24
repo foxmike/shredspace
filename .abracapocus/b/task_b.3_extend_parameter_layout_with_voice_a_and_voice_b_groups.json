@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "task_id": "b.3",
+  "phase": "B",
+  "phase_id": "b",
+  "title": "Extend parameter layout with voice A and voice B groups",
+  "description": "Modify Source/Parameters/ParameterLayout.cpp ONLY. Replace the empty placeholder definition of shredspace::addVoiceParameters with the complete Voice A and Voice B expert parameter groups. This is a serialized same-file write: do not reformat, reorder, or otherwise alter the GLOBAL/PERF/TIME/STEREO/SCENE code written by task b.2, and do not touch the header.\n\nBefore editing, inspect:\n- Source/Parameters/ParameterIDs.h (VOICE_A_* and VOICE_B_* constants)\n- Source/Parameters/ParameterLayout.h (addVoiceParameters declaration)\n- Source/Parameters/ParameterLayout.cpp (existing group helpers written by b.2; follow their exact construction style)\n\nIMPLEMENTATION: write a single file-local static helper, e.g. `static void addOneVoice (juce::AudioProcessorValueTreeState::ParameterLayout& layout, bool isVoiceB)`, that adds the 21 parameters for one voice using the VOICE_A_* constants when isVoiceB is false and the VOICE_B_* constants when true, selecting the per-voice default from the pairs below. addVoiceParameters calls it twice (A then B). Every ID must come from shredspace::paramids; never build IDs by string concatenation.\n\nEXACT PARAMETERS \u2014 ranges are shared, defaults are listed as (Voice A default / Voice B default). Transcribe literally:\n- ENABLE: bool, default true / true\n- TIME_RATIO: float 0.25 to 4.0, default 0.5 / 1.0, skewForCentre around 1.0\n- FINE_OFFSET: float -50.0 to +50.0 ms, default 0.0 / 0.0, suffix \" ms\"\n- LEVEL: float -60.0 to 0.0 dB, default -12.0 / -10.0, suffix \" dB\"\n- TAIL_SCALE: float 0.25 to 4.0, default 0.65 / 1.2, skewForCentre around 1.0\n- ADAPTIVE_ROLE: float 0.0 to 100.0 %, default 40.0 / 85.0\n- PAN: float -100.0 to +100.0, default -20.0 / +20.0\n- WIDTH: float 0.0 to 200.0 %, default 60.0 / 130.0\n- STEREO_OFFSET: float 0.0 to 30.0 ms, default 3.0 / 11.0, suffix \" ms\"\n- CROSS_FEEDBACK: float 0.0 to 100.0 %, default 15.0 / 35.0\n- MOD_PHASE: float 0.0 to 180.0 degrees, default 90.0 / 180.0, suffix \" deg\"\n- HPF: float 40.0 to 1500.0 Hz, default 180.0 / 220.0, skewForCentre around 250.0, suffix \" Hz\"\n- LPF: float 2000.0 to 20000.0 Hz, default 6500.0 / 5500.0, skewForCentre around 6000.0, suffix \" Hz\"\n- PRESENCE_FREQ: float 1500.0 to 6000.0 Hz, default 3200.0 / 3200.0, skewForCentre around 3000.0, suffix \" Hz\"\n- PRESENCE_GUARD: float 0.0 to 12.0 dB, default 4.0 / 5.0, suffix \" dB\"\n- ATTACK_SOFTEN: float 0.0 to 100.0 %, default 30.0 / 40.0\n- MOD_RATE: float 0.05 to 5.0 Hz, default 0.35 / 0.23, skewForCentre around 0.5, suffix \" Hz\"\n- MOD_DEPTH: float 0.0 to 8.0 ms, default 0.4 / 0.7, suffix \" ms\"\n- DRIFT: float 0.0 to 100.0 %, default 10.0 / 15.0\n- DIFFUSION: float 0.0 to 40.0 %, default 8.0 / 12.0\n- SATURATION: float 0.0 to 100.0 %, default 8.0 / 10.0\n\nThat is 21 parameters per voice, 42 added by this task. Do not add any parameter not in this list, and do not add INTEL_* parameters (task b.4 owns those). No internal state may become a parameter. No third-party dependency. No artist or song names.",
+  "acceptance_criteria": [
+    "Source/Parameters/ParameterLayout.cpp defines shredspace::addVoiceParameters with a non-empty body adding 42 parameters (21 for Voice A, 21 for Voice B)",
+    "g++ -std=c++20 -fsyntax-only -I JUCE/modules -I Source -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_audio_processors=1 -DJUCE_STANDALONE_APPLICATION=0 Source/Parameters/ParameterLayout.cpp passes with no errors",
+    "Every voice parameter uses a shredspace::paramids VOICE_A_ or VOICE_B_ constant rather than a raw or concatenated string ID",
+    "The per-voice ranges and defaults in Source/Parameters/ParameterLayout.cpp are exactly the values listed in this task description",
+    "The addIntelligenceParameters placeholder and the GLOBAL, PERF, TIME, STEREO, and SCENE helpers written by task b.2 are left unmodified",
+    "No file outside Source/Parameters/ParameterLayout.cpp is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Parameters/ParameterLayout.cpp"
+  ],
+  "forbidden_changes": [
+    "modify Source/Parameters/ParameterLayout.h",
+    "modify Source/Parameters/ParameterIDs.h",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify anything under JUCE/",
+    "rewrite, reformat, or reorder the GLOBAL, PERF, TIME, STEREO, or SCENE helpers from task b.2",
+    "implement addIntelligenceParameters (owned by task b.4)",
+    "build parameter IDs via string concatenation",
+    "add any third-party dependency"
+  ],
+  "allowed_symbols": [
+    "shredspace::addVoiceParameters",
+    "addOneVoice"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "add a file-local static helper that parameterizes voice A vs voice B",
+      "choose skew and step details within the stated ranges"
+    ],
+    "forbidden": [
+      "change any stated range or default",
+      "introduce a voice-parameter struct or registry shared with other modules",
+      "change the signature of addVoiceParameters"
+    ]
+  },
+  "dependencies": [
+    "b.2"
+  ],
+  "task_timeout_seconds": 2100,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

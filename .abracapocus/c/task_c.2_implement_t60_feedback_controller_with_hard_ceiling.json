@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "task_id": "c.2",
+  "phase": "C",
+  "phase_id": "c",
+  "title": "Implement T60 feedback controller with hard ceiling",
+  "description": "Create Source/DSP/FeedbackController.h and Source/DSP/FeedbackController.cpp implementing T60-derived feedback gain for one delay voice.\n\nBefore editing, inspect:\n- Source/DSP/ (existing module style, include guards, namespace)\n- CMakeLists.txt (for source layout only; do NOT modify it in this task)\n\nRequired implementation (restate these formulas exactly in code):\n1. T60_voice = T60_global * tailScale_voice.\n2. g_requested = 10^(-3 * T / T60_voice), where T is the current voice delay time in seconds.\n3. g_final = min(g_requested, 0.985). The 0.985 ceiling is unconditional and applies including during Hold; expose it as a named constant kMaxFeedbackGain = 0.985 and route every returned gain through it. There must be no code path, flag, or Hold mode that returns a gain above 0.985.\n4. Guard degenerate inputs: if T60_voice <= 0 or T <= 0, return a documented safe value that still respects the ceiling and never produces NaN or inf.\n5. The controller performs no allocation, locking, IO, or string construction in its per-block/per-sample calls. Any smoothing of the T60 target uses a 50 ms time constant and multiplicative (log-domain) smoothing, since T60 is strictly positive.\n\nThe files must be standard C++20 only (<cmath>, <algorithm>). Do NOT include any JUCE header.",
+  "acceptance_criteria": [
+    "Source/DSP/FeedbackController.h and Source/DSP/FeedbackController.cpp exist",
+    "g++ -std=c++20 -fsyntax-only -I Source Source/DSP/FeedbackController.cpp passes",
+    "FeedbackController computes g_requested = 10^(-3*T/T60_voice) with T60_voice = T60_global * tailScale_voice",
+    "A named constant kMaxFeedbackGain equal to 0.985 exists and every returned gain is min(g_requested, 0.985)",
+    "No code path, including a Hold mode or flag, can return a feedback gain greater than 0.985",
+    "Degenerate inputs (T60_voice <= 0 or T <= 0) return a finite documented safe value, never NaN or inf",
+    "No allocation, locking, or IO occurs outside prepare()",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/FeedbackController.h",
+    "Source/DSP/FeedbackController.cpp"
+  ],
+  "forbidden_changes": [
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify anything under JUCE/",
+    "include any JUCE header in FeedbackController.h or FeedbackController.cpp",
+    "create or modify Source/DSP/FractionalDelay.*, Source/DSP/DelayTimeController.*, or Source/DSP/DelayVoice.*",
+    "introduce any conditional that bypasses the 0.985 feedback ceiling",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "FeedbackController",
+    "prepare",
+    "reset",
+    "setGlobalT60",
+    "setTailScale",
+    "setDelayTimeSeconds",
+    "setHoldActive",
+    "getFeedbackGain",
+    "kMaxFeedbackGain"
+  ],
+  "dependencies": [],
+  "task_timeout_seconds": 1200,
+  "verification_commands": []
+}

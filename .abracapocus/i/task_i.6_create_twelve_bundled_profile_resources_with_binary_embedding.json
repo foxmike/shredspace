@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "task_id": "i.6",
+  "phase": "I",
+  "phase_id": "i",
+  "title": "Create twelve bundled profile resources with binary embedding",
+  "description": "Create the twelve bundled profile JSON resources under Resources/Profiles/ and register this phase's sources and resources in CMakeLists.txt. This task is the serialized owner of CMakeLists.txt for this wave.\n\nBefore editing, inspect:\n- Source/Profiles/ProfileSchema.h for the exact required JSON keys and the validation rules the files must satisfy (schema_version, product_version, profile_name, author, description, base_parameter_values, macro_mapping, scene_values, tags).\n- Source/Parameters/ParameterLayout.cpp for the authoritative parameter IDs, minima, maxima, and defaults. Every parameter ID and every value written into a profile MUST come from that file and MUST lie inside the declared range.\n- CMakeLists.txt for the existing target names, source list conventions, and whether juce_add_binary_data is already used.\n\nWork to perform:\n1. Create exactly these twelve files, each valid JSON with schema_version 1 and product_version \"1.0.0\": Resources/Profiles/PrecisionRack.json, RapidDefinition.json, NeoclassicalFlight.json, WideArpeggio.json, SingingLead.json, DryCenterArena.json, LegatoSpace.json, DarkHighGain.json, BalladBloom.json, ControlledCascade.json, MonoRigPolish.json, BufferBend.json.\n2. Each profile supplies base_parameter_values using only existing parameter IDs and in-range values; macro_mapping for all eight macros TIME, SPACE, DEFINITION, BLOOM, TAIL, FOCUS, WIDTH, CHARACTER with destination entries {\"destination\", \"delta_min\", \"delta_max\", \"curve\"} where curve > 0; and scene_values for exactly four scenes A, B, C, D each carrying eight macro targets, a mix target, a routing target, and a hold behavior. author is \"nSpace Systems\".\n3. Descriptions and tags use behavior language only (for example \"tight\", \"articulate\", \"wide\", \"long tail\"). No artist name, no band name, and no song name may appear in any file, including in profile_name, description, and tags. These are engineering starting values, not final tuned values; say so in a short comment field only if the schema permits it, otherwise omit.\n4. In CMakeLists.txt: add a juce_add_binary_data target embedding the twelve Resources/Profiles/*.json files, link it into the plugin target, and add Source/Profiles/ProfileSchema.cpp, Source/Profiles/ProfileManager.cpp, Source/Profiles/ProfileSnapshot.cpp, Source/Profiles/SceneManager.cpp, and Source/Parameters/MacroEngine.cpp to the existing plugin source list. Do not change the project name, version, formats, JUCE submodule pin, plugin codes, bundle identifier, or LV2 URI. Do not add any test file registration; task i.7 owns that.\n5. Verify with: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --target ShredSpace_Standalone.",
+  "acceptance_criteria": [
+    "All twelve files exist: Resources/Profiles/PrecisionRack.json, RapidDefinition.json, NeoclassicalFlight.json, WideArpeggio.json, SingingLead.json, DryCenterArena.json, LegatoSpace.json, DarkHighGain.json, BalladBloom.json, ControlledCascade.json, MonoRigPolish.json, BufferBend.json",
+    "python3 -c \"import json,glob,sys; [json.load(open(p)) for p in glob.glob('Resources/Profiles/*.json')]\" exits 0",
+    "Every profile has schema_version 1, product_version \"1.0.0\", author \"nSpace Systems\", eight macro_mapping entries, and exactly four scene_values entries A, B, C, D",
+    "Every parameter ID used in any profile exists in Source/Parameters/ParameterLayout.cpp and every value lies inside that parameter's declared range",
+    "Every macro destination curve value is strictly greater than zero",
+    "CMakeLists.txt adds a juce_add_binary_data target for the twelve Resources/Profiles JSON files and links it into the plugin target",
+    "CMakeLists.txt adds Source/Profiles/ProfileSchema.cpp, Source/Profiles/ProfileManager.cpp, Source/Profiles/ProfileSnapshot.cpp, Source/Profiles/SceneManager.cpp, and Source/Parameters/MacroEngine.cpp to the plugin source list",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug succeeds",
+    "cmake --build build --target ShredSpace_Standalone succeeds",
+    "No artist, band, or song name appears in any of the twelve JSON files",
+    "No file outside this task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Resources/Profiles/PrecisionRack.json",
+    "Resources/Profiles/RapidDefinition.json",
+    "Resources/Profiles/NeoclassicalFlight.json",
+    "Resources/Profiles/WideArpeggio.json",
+    "Resources/Profiles/SingingLead.json",
+    "Resources/Profiles/DryCenterArena.json",
+    "Resources/Profiles/LegatoSpace.json",
+    "Resources/Profiles/DarkHighGain.json",
+    "Resources/Profiles/BalladBloom.json",
+    "Resources/Profiles/ControlledCascade.json",
+    "Resources/Profiles/MonoRigPolish.json",
+    "Resources/Profiles/BufferBend.json",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under Source/",
+    "modify anything under JUCE/ or change the JUCE submodule pin",
+    "modify CMakePresets.json",
+    "change the project name, version 1.0.0, manufacturer code NSPC, plugin code ShSp, bundle identifier com.nspacesystems.shredspace, or the LV2 URI",
+    "add or remove plugin formats",
+    "register test source files or test targets in CMakeLists.txt",
+    "add any new third-party dependency",
+    "use a parameter ID that does not exist in Source/Parameters/ParameterLayout.cpp",
+    "write a value outside a parameter's declared range",
+    "include artist, band, or song names anywhere"
+  ],
+  "allowed_symbols": [
+    "juce_add_binary_data",
+    "ShredSpaceProfileData",
+    "target_link_libraries",
+    "target_sources"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the engineering starting values inside the declared parameter ranges",
+      "choose the binary data target name",
+      "choose behavior-language wording for descriptions and tags"
+    ],
+    "forbidden": [
+      "extend or alter the profile schema keys",
+      "add new parameters to the layout",
+      "change plugin identity metadata or build targets",
+      "add a test target or test source registration"
+    ]
+  },
+  "dependencies": [
+    "i.3",
+    "i.5"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

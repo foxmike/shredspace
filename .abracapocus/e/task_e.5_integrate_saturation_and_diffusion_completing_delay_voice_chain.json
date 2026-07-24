@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "task_id": "e.5",
+  "phase": "E",
+  "phase_id": "e",
+  "title": "Integrate saturation and diffusion completing delay voice chain",
+  "description": "Wire the phase-e modules into Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp, and register the new sources in CMakeLists.txt. This is a serialized fan-in write: this task is the single owner of DelayVoice.* and CMakeLists.txt in this wave.\n\nBefore editing, inspect:\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (current repeat-loop order, prepareToPlay/prepare wiring, member layout, parameter setters)\n- Source/DSP/SoftSaturator.h and Source/DSP/ShortDiffuser.h (produced by tasks e.2 and e.3: prepare/reset/set signatures and per-channel process functions)\n- Source/DSP/ModulationEngine.h and Source/DSP/StereoProcessor.h (produced by tasks e.1 and e.4)\n- CMakeLists.txt (the existing target_sources list for the shared plugin target and the test runner target, and how earlier phase sources were added)\n\nRequired work:\n1. Complete the binding repeat-loop order inside each voice's feedback loop, exactly: fractional delay read, HPF, LPF, Presence Guard, repeat transient softener, mild saturation (SoftSaturator), restricted diffusion (ShortDiffuser), feedback tap. Saturation and diffusion are inserted after the softener and before the feedback tap; do not reorder any pre-existing stage.\n2. Add SoftSaturator and ShortDiffuser members to DelayVoice (one instance per channel where the module is per-channel, or a single instance handling both channels if the module's API is channel-indexed - follow the modules' actual API). Call their prepare() from DelayVoice's existing prepare path with the same sample rate and maximum block size, and their reset() from DelayVoice's reset path.\n3. Add DelayVoice setters that forward the saturation amount s in [0, 1] and the diffusion amount d in [0, 0.40] to the corresponding modules. Do not add APVTS parameters, GUI, or host-notifying calls here.\n4. Register Source/DSP/ModulationEngine.cpp, Source/DSP/SoftSaturator.cpp, Source/DSP/ShortDiffuser.cpp, and Source/DSP/StereoProcessor.cpp in CMakeLists.txt in the existing source list(s), preserving alphabetical or existing ordering conventions. Do not change target names, the JUCE submodule pin, plugin metadata (ShredSpace / nSpace Systems / NSPC / ShSp / com.nspacesystems.shredspace / urn:nspacesystems:plugin:shredspace), format lists, or presets.\n5. Feedback gain stays T60-derived, g = 10^(-3*T/T60), hard-capped at g_final = min(g_requested, 0.985) including during Hold. Inserting the saturator must not raise loop gain: the saturator has unity small-signal slope, so do not add compensating gain.\n\nReal-time rules (binding): no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, buffer resizing, or coefficient-object allocation inside processBlock or any per-sample path; all maximum-size buffers allocated in prepare. Delay read positions remain clamped to [8 samples, 8.25 seconds]. juce::ScopedNoDenormals remains at the top of processBlock in the processor (do not remove it).\n\nAfter editing, verify with: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo, then cmake --build build --target ShredSpace_VST3 -j. No artist or song names may appear anywhere in the source.",
+  "acceptance_criteria": [
+    "Source/DSP/DelayVoice.cpp calls SoftSaturator after the repeat transient softener and ShortDiffuser after the saturator, immediately before the feedback tap, preserving the order: fractional delay read, HPF, LPF, Presence Guard, softener, saturation, diffusion, feedback tap",
+    "Source/DSP/DelayVoice.h declares SoftSaturator and ShortDiffuser members and setters forwarding saturation amount in [0,1] and diffusion amount in [0,0.40]",
+    "DelayVoice prepare forwards sample rate and maximum block size to SoftSaturator::prepare and ShortDiffuser::prepare, and DelayVoice reset calls their reset functions",
+    "CMakeLists.txt lists Source/DSP/ModulationEngine.cpp, Source/DSP/SoftSaturator.cpp, Source/DSP/ShortDiffuser.cpp, and Source/DSP/StereoProcessor.cpp in the plugin target sources",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo configures successfully",
+    "cmake --build build --target ShredSpace_VST3 -j builds successfully",
+    "Feedback gain remains g = 10^(-3*T/T60) hard-capped at 0.985 and no compensating makeup gain is added around the saturator",
+    "No heap allocation, locking, file IO, or string construction is introduced into processBlock or per-sample paths, and delay read positions remain clamped to [8 samples, 8.25 seconds]",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/DelayVoice.h",
+    "Source/DSP/DelayVoice.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify Source/DSP/ModulationEngine.h, Source/DSP/ModulationEngine.cpp, Source/DSP/SoftSaturator.h, Source/DSP/SoftSaturator.cpp, Source/DSP/ShortDiffuser.h, Source/DSP/ShortDiffuser.cpp, Source/DSP/StereoProcessor.h, or Source/DSP/StereoProcessor.cpp",
+    "modify Source/PluginProcessor.h, Source/PluginProcessor.cpp, Source/PluginEditor.h, Source/PluginEditor.cpp, or Source/ParameterLayout.*",
+    "modify CMakePresets.json",
+    "modify anything under JUCE/ or change the JUCE submodule pin",
+    "change plugin metadata: name ShredSpace, vendor nSpace Systems, version 1.0.0, manufacturer code NSPC, plugin code ShSp, bundle id com.nspacesystems.shredspace, LV2 URI urn:nspacesystems:plugin:shredspace",
+    "reorder or remove any existing stage of the repeat loop",
+    "raise the feedback hard cap above 0.985 or add makeup gain around the saturator",
+    "add any new third-party dependency or test framework",
+    "add APVTS parameters, GUI code, or setValueNotifyingHost calls in this task",
+    "allocate memory, lock, construct strings, or perform file IO inside processBlock",
+    "include artist or song names in source or comments"
+  ],
+  "dependencies": [
+    "e.1",
+    "e.2",
+    "e.3",
+    "e.4"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}

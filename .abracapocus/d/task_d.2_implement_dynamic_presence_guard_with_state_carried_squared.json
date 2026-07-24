@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "task_id": "d.2",
+  "phase": "D",
+  "phase_id": "d",
+  "title": "Implement dynamic presence guard with state carried squared",
+  "description": "Create Source/DSP/PresenceGuard.h and Source/DSP/PresenceGuard.cpp implementing the dynamic presence guard that tames accumulating presence-band buildup inside each delay voice's feedback loop.\n\nBefore editing, inspect:\n- Source/DSP/RepeatToneProcessor.h (produced by d.1; reuse its BiquadCoefficients, makePeaking, and per-sample biquad processing rather than duplicating RBJ math)\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp (prepare/reset/process conventions, channel count handling)\n- CMakeLists.txt (source list layout only, for reference; do not edit it here)\n\nRequired design:\n- Class PresenceGuard with a band-pass detector centered on the presence frequency, user-settable within 1.5 kHz to 6 kHz (default 3000 Hz), built from RBJ high-pass and low-pass sections or an RBJ band-pass using the same shared omega0/alpha formulation.\n- Detector energy state is carried squared: energy2[n] = alpha*energy2[n-1] + (1 - alpha)*presence*presence. The square root is taken only when the level is read: energy = sqrt(max(energy2, 0.0f) + epsilon). Do not store the square root back into the state, and do not add epsilon into the recursion, so epsilon cannot accumulate into a steady-state bias.\n- level_dB = 20*log10(energy + epsilon).\n- Excess: u = clamp((level_dB - threshold_dB)/kneeWidth_dB, 0, 1); smoothstep s = 3*u*u - 2*u*u*u.\n- cut_dB = -maxCut_dB * s, smoothed, then applied by driving a negative peaking filter (RepeatToneProcessor::makePeaking with gainDb = cut_dB) at the presence frequency.\n- Internal defaults: threshold -24 dBFS, knee width 12 dB, detector attack 5 ms, release 120 ms. Attack and release coefficients use alpha = exp(-1.0/(tau*Fs)) with the attack coefficient chosen when the rectified input exceeds the current envelope and the release coefficient otherwise.\n- User maximum cut range 0 to 12 dB (default 6 dB). Provide void setEffectiveMaxCutDb (float db) so FOCUS, DEFINITION, and Adaptive Role layering can raise the effective maximum cut later; clamp the effective maximum to [0, 24] dB defensively. This class must not read APVTS or any parameter tree directly.\n- Peaking coefficients update at the same bounded control rate as d.1 (recompute in updateCoefficients(), never per sample).\n\nReal-time contract (binding): no heap allocation, locks, file IO, string construction, GUI calls, buffer resizing, or coefficient-object allocation inside processing methods. All per-channel state is fixed-size and reset in prepare().\n\nPublic API to provide (exact names required):\n- void prepare (double sampleRate, int maxBlockSize, int numChannels)\n- void reset()\n- void setPresenceFrequency (float hz)\n- void setThresholdDb (float db)\n- void setKneeWidthDb (float db)\n- void setMaxCutDb (float db)\n- void setEffectiveMaxCutDb (float db)\n- float processSample (int channel, float x)\n- void updateCoefficients()\n- float getCurrentCutDb (int channel) const (for tests and telemetry only)\n- static float computeCutDb (float levelDb, float thresholdDb, float kneeWidthDb, float maxCutDb) implementing the clamp + smoothstep rule as a pure function so tests can verify the curve directly.\n\nDo not modify DelayVoice or CMakeLists.txt in this task; integration and source registration happen in d.4.",
+  "acceptance_criteria": [
+    "Source/DSP/PresenceGuard.h declares class PresenceGuard with prepare, reset, setPresenceFrequency, setThresholdDb, setKneeWidthDb, setMaxCutDb, setEffectiveMaxCutDb, processSample, updateCoefficients, getCurrentCutDb, and static computeCutDb",
+    "Source/DSP/PresenceGuard.cpp carries detector state as squared energy (energy2 = alpha*energy2 + (1-alpha)*presence*presence) and computes sqrt(max(energy2,0)+epsilon) only at read time, never writing the square root or epsilon back into the state",
+    "computeCutDb implements u = clamp((levelDb - thresholdDb)/kneeWidthDb, 0, 1), smoothstep 3u^2 - 2u^3, and cut_dB = -maxCutDb * smoothstep, returning 0 dB at or below threshold",
+    "Defaults in Source/DSP/PresenceGuard.cpp are threshold -24 dB, knee 12 dB, attack 5 ms, release 120 ms, and the user max cut is clamped to 0..12 dB with setEffectiveMaxCutDb able to raise it",
+    "The cut is applied through an RBJ peaking section obtained from RepeatToneProcessor::makePeaking with negative gain, recomputed only in updateCoefficients()",
+    "No heap allocation, locks, file IO, string construction, or buffer resizing appears in any processing method in Source/DSP/PresenceGuard.cpp",
+    "g++ -std=c++20 -fsyntax-only -I JUCE/modules -I Source Source/DSP/PresenceGuard.cpp succeeds, or the file compiles as part of the existing CMake target once registered in d.4",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/PresenceGuard.h",
+    "Source/DSP/PresenceGuard.cpp"
+  ],
+  "forbidden_changes": [
+    "modify anything under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/RepeatToneProcessor.h or Source/DSP/RepeatToneProcessor.cpp",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginProcessor.* or Source/PluginEditor.*",
+    "add any new third-party dependency",
+    "read APVTS or any parameter tree from inside PresenceGuard",
+    "store the square root of the detector energy back into the detector state",
+    "add epsilon inside the energy recursion",
+    "allocate memory, lock, or resize buffers inside processing methods",
+    "reference artist or song names in any source file"
+  ],
+  "allowed_symbols": [
+    "PresenceGuard",
+    "prepare",
+    "reset",
+    "setPresenceFrequency",
+    "setThresholdDb",
+    "setKneeWidthDb",
+    "setMaxCutDb",
+    "setEffectiveMaxCutDb",
+    "processSample",
+    "updateCoefficients",
+    "getCurrentCutDb",
+    "computeCutDb"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose band-pass detector construction from RBJ high-pass plus low-pass or a single RBJ band-pass",
+      "choose the epsilon constant value",
+      "choose internal member naming and per-channel state layout"
+    ],
+    "forbidden": [
+      "introduce a lookahead or FFT-based detector",
+      "apply the cut with a broadband gain instead of a peaking filter",
+      "change DelayVoice or plugin processor interfaces",
+      "add a new DSP framework or third-party library"
+    ]
+  },
+  "dependencies": [],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

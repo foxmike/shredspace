@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "task_id": "g.7",
+  "phase": "G",
+  "phase_id": "g",
+  "title": "Create analyzer synthetic and rate equivalence tests",
+  "description": "Create tests/AnalysisTests.cpp and edit CMakeLists.txt ONLY. CMakeLists.txt is owned by this task alone within phase g; register all six Analysis source files plus the new test file here.\n\nBefore editing, inspect:\n- CMakeLists.txt (learn the existing plugin target name, the existing console test-runner target, how earlier phases' test .cpp files were added, and how CTest is registered with add_test; follow those exact patterns)\n- tests/ (read an existing test file from an earlier phase to copy the juce::UnitTest subclass pattern, the static instance registration idiom, and the naming convention)\n- Source/Analysis/AnalysisResampler.h, PerformanceAnalyzer.h, OnsetDetector.h, DensityEstimator.h, SustainEstimator.h, AdaptiveController.h (tasks g.1 through g.6 \u2014 the public APIs under test)\n\nCMakeLists.txt changes, minimal and additive only: add Source/Analysis/AnalysisResampler.cpp, Source/Analysis/PerformanceAnalyzer.cpp, Source/Analysis/OnsetDetector.cpp, Source/Analysis/DensityEstimator.cpp, Source/Analysis/SustainEstimator.cpp, and Source/Analysis/AdaptiveController.cpp to the existing plugin/shared source list, and add tests/AnalysisTests.cpp to the existing console test-runner target's sources. Do not create new targets, do not change project metadata (name ShredSpace, vendor nSpace Systems, version 1.0.0, manufacturer code NSPC, plugin code ShSp, bundle identifier com.nspacesystems.shredspace, LV2 URI urn:nspacesystems:plugin:shredspace), do not change the JUCE submodule reference, and do not alter existing targets, formats, or presets.\n\nTesting framework, binding: use ONLY the built-in juce::UnitTest framework with the existing console runner target executed through CTest. Catch2, GoogleTest, and every other third-party framework are forbidden, and no new third-party dependency of any kind may be introduced.\n\ntests/AnalysisTests.cpp must define juce::UnitTest subclasses driving the analyzers with synthetic signals generated in the test itself (no audio files, no external fixtures) and covering:\n1. Isolated impulses are accepted as onsets; the 25 ms refractory interval prevents double-counting a single impulse.\n2. Impulse trains at 2, 4, 8, 12, 16, and 20 events per second: assert that the reported density is monotonically non-decreasing across that ascending sequence of event rates, and that density at 20 events/second is strictly greater than density at 2 events/second.\n3. A sustained sine develops sustain confidence above a documented floor after the sustain ramp elapses.\n4. Vibrato (a sine with slow frequency modulation) does not continuously retrigger onsets: assert the accepted-onset count over the test duration stays below a documented small bound.\n5. Amplitude tremolo and legato-like frequency changes produce continuous, bounded outputs with no NaN or infinity in any analyzer output.\n6. Noise bursts and distorted guitar-like signals (a sine through a tanh-style waveshaper) produce accepted onsets, exercising the flux path that carries the largest fusion weight because high-gain distortion flattens amplitude transients.\n7. Gated silence: silence triggers a phrase gap only after prior activity \u2014 assert phraseGap stays at zero for a run that begins in silence with no prior activity, and becomes non-zero after activity followed by silence exceeding the gap duration.\n8. Sub-gate noise (level below the noise gate) does not trigger bloom: assert the AdaptiveController bloom output remains zero for that input.\n9. AdaptiveController mode coverage: Mode::Off yields exactly zero for every destination delta, and Mode::Level yields a non-zero wet delta while tail, tone, width, softening, and diffusion deltas are exactly zero.\n10. RATE EQUIVALENCE: render the SAME synthetic material at host rates 44100, 48000, 96000, and 192000 Hz, feed each through a freshly prepared PerformanceAnalyzer chain, and assert the resulting analysis results are equivalent within a documented numerical tolerance. Exact sample identity is NOT required and must not be asserted, because rational rate conversion is lossy. Assert instead that accepted-onset counts match exactly across the four rates, that accepted-onset times agree within 10 ms, and that final density and sustain values agree within an absolute tolerance of 0.05. Write the chosen tolerances as named constants with an explanatory comment so the claim of equivalence is explicit and checkable.\n\nEvery test must be deterministic: seed any noise generator with a fixed seed, and use no wall-clock time and no randomness that varies between runs.",
+  "acceptance_criteria": [
+    "tests/AnalysisTests.cpp exists and defines juce::UnitTest subclasses only, with no reference to Catch2, GoogleTest, doctest, or any other third-party test framework",
+    "CMakeLists.txt adds all six Source/Analysis/*.cpp files to the existing shared/plugin source list and adds tests/AnalysisTests.cpp to the existing console test-runner target, creating no new targets",
+    "CMakeLists.txt still declares product name ShredSpace, company nSpace Systems, version 1.0.0, manufacturer code NSPC, plugin code ShSp, bundle identifier com.nspacesystems.shredspace, and LV2 URI urn:nspacesystems:plugin:shredspace unchanged",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build -j 4 succeeds, compiling all six Analysis sources and tests/AnalysisTests.cpp",
+    "ctest --test-dir build --output-on-failure passes, and its output shows the analysis unit tests executing",
+    "The rate-equivalence test renders identical synthetic material at 44100, 48000, 96000, and 192000 Hz and asserts equivalence via matching accepted-onset counts, onset times within 10 ms, and density and sustain within an absolute tolerance of 0.05, using named tolerance constants and never asserting exact sample identity",
+    "The density test asserts monotonically non-decreasing density across impulse trains at 2, 4, 8, 12, 16, and 20 events per second",
+    "The phrase-gap test asserts phraseGap remains zero for a run beginning in silence with no prior activity and becomes non-zero after activity followed by silence",
+    "The AdaptiveController test asserts Mode::Off yields exactly zero for every destination delta and Mode::Level yields a non-zero wet delta with all other deltas exactly zero",
+    "All test signals are generated in-process with fixed seeds and no external fixture files, wall-clock time, or run-varying randomness",
+    "No file outside tests/AnalysisTests.cpp and CMakeLists.txt is created or modified"
+  ],
+  "selected_backend": "pi_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "tests/AnalysisTests.cpp",
+    "CMakeLists.txt"
+  ],
+  "forbidden_changes": [
+    "modify any file under Source/",
+    "modify anything under JUCE/ or change the pinned JUCE submodule commit",
+    "modify CMakePresets.json",
+    "add Catch2, GoogleTest, doctest, or any other third-party test framework",
+    "add any new third-party dependency of any kind",
+    "create new CMake targets or change existing plugin formats, product name, vendor, version, codes, bundle identifier, or LV2 URI",
+    "assert exact sample identity across different host sample rates",
+    "use audio fixture files, wall-clock time, or unseeded randomness in tests",
+    "include artist or song names in any test signal name, comment, or identifier"
+  ],
+  "allowed_symbols": [
+    "AnalysisResamplerTests",
+    "PerformanceAnalyzerTests",
+    "OnsetDetectorTests",
+    "DensityEstimatorTests",
+    "SustainEstimatorTests",
+    "AdaptiveControllerTests",
+    "RateEquivalenceTests",
+    "runTest",
+    "beginTest",
+    "expect",
+    "expectWithinAbsoluteError"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose test class names, helper signal generator names, and test durations",
+      "choose documented numerical floors for the sustain and onset-count assertions",
+      "choose where in the existing CMake source lists to append the new files"
+    ],
+    "forbidden": [
+      "introduce a new test framework or dependency",
+      "loosen the stated 10 ms onset-time and 0.05 value tolerances",
+      "change analyzer implementation files to make a test pass",
+      "restructure the CMake build beyond appending source files"
+    ]
+  },
+  "dependencies": [
+    "g.6"
+  ],
+  "task_timeout_seconds": 2400,
+  "model": "openrouter/z-ai/glm-5.21",
+  "verification_commands": []
+}

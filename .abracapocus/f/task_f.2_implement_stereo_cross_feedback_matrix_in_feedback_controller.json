@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "task_id": "f.2",
+  "phase": "F",
+  "phase_id": "f",
+  "title": "Implement stereo cross feedback matrix in feedback controller",
+  "description": "Add the stereo cross-feedback matrix to Source/DSP/FeedbackController.h and Source/DSP/FeedbackController.cpp. Do not touch RoutingEngine, DelayVoice, or PluginProcessor.\n\nBefore editing, inspect:\n- Source/DSP/FeedbackController.h and .cpp (existing T60-derived gain computation and smoothing members)\n- Source/DSP/RoutingEngine.h (routing surface completed by task f.1; read only)\n- Source/DSP/DelayVoice.h (how the feedback tap is consumed; read only)\n\nRequired behavior, restated so no external document is needed:\n- Cross-feedback with parameter q in [0,1]:\n  feedback_L = g * ((1 - q) * z_L + q * z_R)\n  feedback_R = g * (q * z_L + (1 - q) * z_R)\n  where z_L and z_R are the current left/right loop taps and g is the feedback gain.\n- q = 0 is independent channels, q = 0.5 is stereo average, q = 1 is ping-pong channel exchange.\n- The matrix eigenvalues are g and g*(1 - 2q), so the existing hard ceiling on g bounds stability across the entire q range. Do not add a separate q-dependent gain reduction.\n- Feedback gain remains T60-derived: g = 10^(-3*T/T60) where T is the current delay time in seconds and T60 is the target decay time in seconds. The hard cap is unconditional: g_final = min(g_requested, 0.985), applied including during Hold.\n- q is smoothed with a linear juce::SmoothedValue over 30 ms (normalized expert control). T60/feedback target smoothing stays at 50 ms. Filter frequency and T60 use multiplicative smoothing only where already established; do not convert existing multiplicative smoothing to linear.\n\nReal-time rules that are binding: no heap allocation, locks, IO, string construction, buffer resizing, or unbounded loops inside the per-sample or per-block feedback computation. Any state needed for the matrix must be allocated in the existing prepare path.\n\nAdd a setCrossFeedback(float q) style setter and a process entry point that takes z_L and z_R and yields feedback_L and feedback_R, keeping the existing single-channel path working for mono layouts.",
+  "acceptance_criteria": [
+    "Source/DSP/FeedbackController.h declares a cross-feedback setter taking q and a stereo feedback computation entry point returning left and right feedback values",
+    "Source/DSP/FeedbackController.cpp implements feedback_L = g*((1-q)*z_L + q*z_R) and feedback_R = g*(q*z_L + (1-q)*z_R)",
+    "Source/DSP/FeedbackController.cpp computes g = 10^(-3*T/T60) and applies the unconditional cap g_final = min(g_requested, 0.985)",
+    "Source/DSP/FeedbackController.cpp smooths q with a linear juce::SmoothedValue configured for 30 ms",
+    "Source/DSP/FeedbackController.cpp contains no q-dependent gain reduction beyond the 0.985 cap",
+    "The feedback computation contains no new/delete, no malloc, no buffer resize, no juce::String construction, and no lock acquisition",
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo succeeds",
+    "cmake --build build --target ShredSpace_VST3 -j 4 succeeds",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/FeedbackController.h",
+    "Source/DSP/FeedbackController.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "modify Source/DSP/RoutingEngine.h or Source/DSP/RoutingEngine.cpp",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "raise, remove, or conditionally bypass the 0.985 feedback ceiling",
+    "add any new third-party dependency",
+    "allocate memory, lock, or construct strings inside the feedback computation"
+  ],
+  "allowed_symbols": [
+    "FeedbackController",
+    "FeedbackController::setCrossFeedback",
+    "FeedbackController::processStereo",
+    "FeedbackController::prepare",
+    "FeedbackController::reset",
+    "FeedbackController::setDecayTime",
+    "FeedbackController::setDelayTime"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the exact signature style for the stereo feedback entry point",
+      "choose internal member names for the smoothed q value"
+    ],
+    "forbidden": [
+      "introduce a matrix or linear-algebra library",
+      "change the T60 to gain mapping",
+      "add extra stability compensation beyond the specified cap",
+      "alter the RoutingEngine or DelayVoice public interfaces"
+    ]
+  },
+  "dependencies": [
+    "f.1"
+  ],
+  "task_timeout_seconds": 1800,
+  "verification_commands": []
+}

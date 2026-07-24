@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "task_id": "g.5",
+  "phase": "G",
+  "phase_id": "g",
+  "title": "Implement sustain confidence and phrase gap detector",
+  "description": "Create Source/Analysis/SustainEstimator.h and Source/Analysis/SustainEstimator.cpp ONLY.\n\nBefore editing, inspect:\n- Source/Analysis/PerformanceAnalyzer.h (task g.2 \u2014 slow-envelope dB level and the fixed 48000 Hz analysis clock)\n- Source/Analysis/OnsetDetector.h (task g.3 \u2014 samples since last accepted onset and smoothed onset activity; consume these, do not recompute them)\n- Source/Analysis/DensityEstimator.h (task g.4 \u2014 density; consume it, do not recompute it)\n- CMakeLists.txt (read only; do NOT edit it)\n\nImplement class SustainEstimator with prepare(), reset(), and process (float inputLevelDb, float timeSinceLastOnsetSeconds, float density, float smoothedOnsetActivity, int numAnalysisSamples), plus const accessors getActivity(), getSustain(), and getPhraseGap().\n\nRequired equations, exactly as specified and binding. Define smoothstep(t) with t clamped to [0,1] as 3*t*t - 2*t*t*t.\n- activity = smoothstep((inputLevel_dB - gate_dB) / gateWidth_dB), defaults gate_dB = -45.0 and gateWidth_dB = 12.0, both settable.\n- sustainTime = smoothstep((timeSinceLastOnset - sustainStart) / (sustainFull - sustainStart)), defaults sustainStart = 0.15 s and sustainFull = 0.60 s, both settable.\n- sustain = activity * sustainTime * (1 - density) * (1 - smoothedOnsetActivity).\nsustain is a continuous confidence in [0,1]. It is NEVER a hard technique classification: do not threshold it into a boolean, do not name any output 'isSustained' or similar, and do not branch audio behavior on it here.\n\nPhrase-gap detector: emit a continuous phraseGap value in [0,1] that becomes non-zero only when ALL THREE hold: (a) there was recent prior activity \u2014 track a latch that is set whenever activity exceeds a modest level (default 0.5) and that decays/clears after a configurable memory window (default 4.0 seconds) with no activity; (b) the current envelope level is below the gate (inputLevel_dB < gate_dB); and (c) no accepted onset has occurred for at least the gap duration (default 0.35 s). Silence must therefore trigger a phrase gap ONLY after prior activity \u2014 a cold start in silence must produce phraseGap == 0.\n\nShape the raw gap condition through attack / hold / release: attack time default 0.05 s, hold time default 0.20 s, release time default 0.30 s, all expressed in analysis samples at the fixed 48000 Hz rate and precomputed in prepare(). The shaped output is the value returned by getPhraseGap().\n\nThis module generates no audio itself: it must contain no audio buffer writes, no oscillators, no gain application, and no calls into any delay or routing class.\n\nReal-time rules restated and binding: no heap allocation, locks, file IO, string construction, GUI calls, unbounded loops, or buffer resizing inside process(); every coefficient and buffer is set up in prepare(). Use juce::ScopedNoDenormals or explicit denormal flushing where envelope-style state is updated. Do not introduce any new third-party dependency.",
+  "acceptance_criteria": [
+    "Source/Analysis/SustainEstimator.h and Source/Analysis/SustainEstimator.cpp exist and define class SustainEstimator with prepare, reset, process, getActivity, getSustain, and getPhraseGap members",
+    "activity is computed as smoothstep((inputLevel_dB - gate_dB)/gateWidth_dB) and sustainTime as smoothstep((timeSinceLastOnset - sustainStart)/(sustainFull - sustainStart)) with smoothstep defined as 3t^2 - 2t^3 on a clamped argument",
+    "sustain is computed as activity * sustainTime * (1 - density) * (1 - smoothedOnsetActivity) and returned as a continuous float, with no boolean technique classification anywhere in the file",
+    "The phrase-gap condition requires recent prior activity, an envelope below the gate, and no accepted onset for the gap duration, so that a cold start in silence yields phraseGap of zero",
+    "Attack, hold, and release shaping times are converted to analysis-sample counts at the fixed 48000 Hz analysis rate inside prepare",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_dsp=1 Source/Analysis/SustainEstimator.cpp succeeds",
+    "SustainEstimator.cpp writes to no audio buffer and calls no delay, routing, or feedback class",
+    "SustainEstimator::process contains no call to new, malloc, resize, setSize, or any locking primitive",
+    "No file outside Source/Analysis/SustainEstimator.h and Source/Analysis/SustainEstimator.cpp is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Analysis/SustainEstimator.h",
+    "Source/Analysis/SustainEstimator.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any other file under Source/Analysis/",
+    "modify CMakeLists.txt",
+    "modify anything under JUCE/",
+    "add any new third-party dependency",
+    "threshold sustain into a boolean or emit a hard technique classification",
+    "generate or modify any audio signal",
+    "derive attack, hold, release, or gap durations from the host sample rate",
+    "recompute density or onset activity locally instead of consuming the supplied values"
+  ],
+  "allowed_symbols": [
+    "SustainEstimator",
+    "prepare",
+    "reset",
+    "process",
+    "getActivity",
+    "getSustain",
+    "getPhraseGap",
+    "setGate",
+    "setSustainRange",
+    "setGapTimes"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose private member names and the internal latch representation",
+      "choose the exact one-pole form used for attack, hold, and release shaping",
+      "add private helper methods inside SustainEstimator"
+    ],
+    "forbidden": [
+      "change the specified activity, sustainTime, or sustain equations",
+      "remove any of the three phrase-gap preconditions",
+      "introduce a new third-party dependency",
+      "modify shared plugin or build files"
+    ]
+  },
+  "dependencies": [
+    "g.2"
+  ],
+  "task_timeout_seconds": 1500,
+  "verification_commands": []
+}

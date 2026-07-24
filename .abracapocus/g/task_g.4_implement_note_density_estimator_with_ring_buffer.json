@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "g.4",
+  "phase": "G",
+  "phase_id": "g",
+  "title": "Implement note density estimator with ring buffer",
+  "description": "Create Source/Analysis/DensityEstimator.h and Source/Analysis/DensityEstimator.cpp ONLY.\n\nBefore editing, inspect:\n- Source/Analysis/PerformanceAnalyzer.h (task g.2 \u2014 fixed 48000 Hz analysis rate and the analysis-sample clock this module counts in)\n- Source/Analysis/AnalysisResampler.h (task g.1 \u2014 the analysisSampleRate constant)\n- CMakeLists.txt (read only; do NOT edit it)\n\nImplement class DensityEstimator with prepare(), reset(), pushOnset (int64_t analysisSampleTimestamp), advance (int numAnalysisSamples), and const accessors getEventRate() and getDensity().\n\nStorage: accepted onset timestamps are held in a fixed-size, real-time-safe ring buffer sized at compile time (use a std::array with capacity 64 onset slots \u2014 ample for the densest realistic playing inside the density window). The ring buffer is a plain member array; it is never resized and never heap-allocated. When the buffer is full, the oldest timestamp is overwritten; overflow is acceptable and must not allocate, throw, or block.\n\nRequired equations, exactly as specified and binding:\n- The density window is a configurable duration with default 2.0 seconds, expressed internally in analysis samples at the fixed 48000 Hz rate (2.0 * 48000 = 96000 samples). It must NOT be derived from the host sample rate.\n- eventRate = (number of onset timestamps inside the density window) / (density window duration in seconds).\n- u = clamp((eventRate - densityStart) / (densityFull - densityStart), 0.0f, 1.0f), with defaults densityStart = 2.0 events/second and densityFull = 14.0 events/second, both settable.\n- density = 3*u*u - 2*u*u*u (smoothstep). Guard against densityFull == densityStart by treating u as 0 in that degenerate case.\n\nDensity must rise monotonically with event rate: because smoothstep is monotone non-decreasing on [0,1] and u is monotone in eventRate, do not add any non-monotone shaping, hysteresis, or randomization.\n\nExpiry: advance() increments the internal analysis-sample clock and drops timestamps older than the window by moving a tail index only \u2014 never by shifting or reallocating the array, and never with an unbounded loop over an unbounded range (bound the eviction loop by the fixed ring capacity).\n\nReal-time rules restated and binding: no heap allocation, locks, file IO, string construction, GUI calls, buffer resizing, or unbounded loops in pushOnset, advance, or the accessors. All state is fixed-size member data. density and eventRate are continuous values; this module performs no technique classification. Do not introduce any new third-party dependency.",
+  "acceptance_criteria": [
+    "Source/Analysis/DensityEstimator.h and Source/Analysis/DensityEstimator.cpp exist and define class DensityEstimator with prepare, reset, pushOnset, advance, getEventRate, and getDensity members",
+    "Onset timestamps are stored in a fixed-capacity std::array-based ring buffer with no heap allocation and no resizing anywhere in the file",
+    "The density window is expressed in analysis samples at the fixed 48000 Hz analysis rate and does not depend on the host sample rate",
+    "eventRate is computed as the onset count inside the window divided by the window duration in seconds",
+    "u is computed as clamp((eventRate - densityStart)/(densityFull - densityStart), 0, 1) and density as 3*u*u - 2*u*u*u",
+    "g++ -std=c++20 -fsyntax-only -IJUCE/modules -ISource -DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_dsp=1 Source/Analysis/DensityEstimator.cpp succeeds",
+    "No function in DensityEstimator.cpp calls new, malloc, resize, push_back, or any locking primitive",
+    "No file outside Source/Analysis/DensityEstimator.h and Source/Analysis/DensityEstimator.cpp is created or modified"
+  ],
+  "selected_backend": "antigravity_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/Analysis/DensityEstimator.h",
+    "Source/Analysis/DensityEstimator.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any other file under Source/Analysis/",
+    "modify CMakeLists.txt",
+    "modify anything under JUCE/",
+    "add any new third-party dependency",
+    "use std::vector, std::deque, or any dynamically sized container for onset timestamps",
+    "derive the density window from the host sample rate",
+    "add non-monotone shaping or hysteresis to the density mapping"
+  ],
+  "allowed_symbols": [
+    "DensityEstimator",
+    "prepare",
+    "reset",
+    "pushOnset",
+    "advance",
+    "getEventRate",
+    "getDensity",
+    "setDensityWindowSeconds",
+    "setDensityRange"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose private member names and ring-buffer index bookkeeping",
+      "choose whether timestamps are stored as int64_t sample counts or as a struct",
+      "add private helper methods inside DensityEstimator"
+    ],
+    "forbidden": [
+      "change the specified eventRate, u, or smoothstep density equations",
+      "change the default densityStart of 2.0 and densityFull of 14.0 without exposing them as settable members",
+      "introduce a new third-party dependency",
+      "allocate or resize storage at runtime"
+    ]
+  },
+  "dependencies": [
+    "g.2"
+  ],
+  "task_timeout_seconds": 1500,
+  "verification_commands": []
+}

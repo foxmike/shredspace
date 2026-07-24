@@ -1,0 +1,63 @@
+{
+  "task_id": "h.3",
+  "schema_version": 1,
+  "phase": "H",
+  "phase_id": "h",
+  "title": "Integrate analysis chain and snapshot publication into processBlock",
+  "description": "Modify Source/PluginProcessor.h and Source/PluginProcessor.cpp only, to run the analysis chain at bounded control-rate cadence and publish the adaptive snapshot to the voices.\n\nBefore editing, inspect:\n- Source/Analysis/AdaptiveSnapshot.h (h.1) for the publisher API.\n- Source/DSP/DelayVoice.h (h.2) for applyAdaptiveSnapshot's signature and call site expectations.\n- Source/Analysis/ for the existing anti-alias filter, stateful sample-rate converter, analyzer, onset detector, density estimator, sustain estimator, and adaptive controller classes and their step/process entry points.\n- Source/PluginProcessor.cpp for the existing prepareToPlay allocation block, the existing pre-delay analysis tap, and the existing control-rate cadence counter if one already exists.\n\nWork required:\n1. Add as members an AdaptiveSnapshotPublisher, a reusable AdaptiveSnapshot scratch instance, and a control-rate block counter. Allocate all analysis-chain buffers, the resampler state, and the anti-alias filter state in prepareToPlay only, sized for the maximum block size and channel count. The analyzer runs at a fixed internal 48000 Hz analysis rate behind the anti-alias filter and the stateful sample-rate converter regardless of the host sample rate; reset all analysis state in prepareToPlay.\n2. In processBlock, with juce::ScopedNoDenormals already at the top: feed the resampler from the existing pre-delay analysis tap, then at a bounded control-rate cadence (a fixed number of samples per control step, never a per-sample or unbounded loop) step the analyzer, onset, density, and sustain estimators and then the adaptive controller. Fill the scratch AdaptiveSnapshot from the controller output (contraction, bloom, mode, and per-voice deltas) and call publisher.publish(). Immediately before the voices process, call publisher.read() into a member snapshot and pass it to each voice via applyAdaptiveSnapshot with that voice's index; on a failed read, reuse the previously read snapshot.\n3. Off mode must be a provably static path: when the adaptive mode parameter is Off, do not step the analysis chain and publish a default-constructed (all-zero) AdaptiveSnapshot exactly once on the transition into Off, so the rendered output is sample-identical to the non-adaptive static path within floating-point determinism.\n4. No heap allocation, lock, file IO, string construction, GUI call, unbounded loop, buffer resize, or FFT allocation may be introduced into processBlock. The adaptive path must not call setValueNotifyingHost and must not rewrite base APVTS values.\n\nDo not modify DelayVoice, AdaptiveSnapshot.h, CMakeLists.txt, tests, or anything under JUCE/.",
+  "acceptance_criteria": [
+    "Source/PluginProcessor.h declares an AdaptiveSnapshotPublisher member, a member AdaptiveSnapshot, and a control-rate cadence counter",
+    "Source/PluginProcessor.cpp allocates and resets all analysis-chain, resampler, and anti-alias state in prepareToPlay and allocates nothing in processBlock",
+    "processBlock feeds the resampler from the pre-delay analysis tap and steps analyzer, onset, density, sustain, and adaptive controller at a bounded control-rate cadence with no unbounded loop",
+    "processBlock publishes the snapshot through AdaptiveSnapshotPublisher::publish and reads it back via read() before calling DelayVoice::applyAdaptiveSnapshot for each voice with its voice index",
+    "When adaptive mode is Off the analysis chain is not stepped and an all-zero snapshot is published, making the signal path static",
+    "The analyzer runs at a fixed internal 48000 Hz analysis rate behind the anti-alias filter and stateful sample-rate converter regardless of host sample rate",
+    "processBlock contains juce::ScopedNoDenormals and adds no heap allocation, lock, file IO, string construction, GUI call, or buffer resize",
+    "Source/PluginProcessor.cpp adds no setValueNotifyingHost call on the adaptive path",
+    "cmake --build build --target ShredSpace_VST3 succeeds and cmake --build build --target ShredSpace_Standalone succeeds after this change",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/PluginProcessor.h",
+    "Source/PluginProcessor.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify Source/Analysis/AdaptiveSnapshot.h",
+    "modify Source/DSP/DelayVoice.h or Source/DSP/DelayVoice.cpp",
+    "modify Source/PluginEditor.h or Source/PluginEditor.cpp",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "allocate memory, lock, perform file IO, construct strings, or resize buffers inside processBlock",
+    "run the analyzer at the host sample rate instead of the fixed 48000 Hz internal analysis rate",
+    "step the analysis chain per sample or in an unbounded loop",
+    "call setValueNotifyingHost or rewrite base APVTS values from the adaptive path",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "AdaptiveSnapshotPublisher",
+    "AdaptiveSnapshot",
+    "applyAdaptiveSnapshot",
+    "prepareToPlay",
+    "processBlock"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "choose the exact control-rate cadence in samples, as a named constant",
+      "add private members for analysis scratch buffers sized in prepareToPlay",
+      "add a private helper that fills the scratch AdaptiveSnapshot from the controller output"
+    ],
+    "forbidden": [
+      "change the plugin bus layout support or parameter layout",
+      "introduce a new threading model or background worker for analysis",
+      "change the AdaptiveSnapshot schema or the publisher API",
+      "change the DelayVoice interface"
+    ]
+  },
+  "dependencies": [
+    "h.2"
+  ],
+  "task_timeout_seconds": 2700,
+  "verification_commands": []
+}

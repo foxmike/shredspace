@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "task_id": "h.2",
+  "phase": "H",
+  "phase_id": "h",
+  "title": "Apply adaptive deltas to effective values inside delay voice",
+  "description": "Modify Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp only, so each voice consumes an AdaptiveSnapshot once per block and folds its deltas into effective values using the binding layering rules.\n\nBefore editing, inspect:\n- Source/Analysis/AdaptiveSnapshot.h (created in h.1) for the exact field names and the read() contract.\n- Source/DSP/DelayVoice.h and Source/DSP/DelayVoice.cpp for existing base value handling, existing macro/scene delta combination, the existing adaptiveRole member, and the existing per-block control update entry point.\n- Source/DSP/FeedbackController.h for how T60 currently feeds the feedback gain and where the 0.985 cap is applied.\n\nAdd to DelayVoice a method `void applyAdaptiveSnapshot (const AdaptiveSnapshot& snapshot, int voiceIndex) noexcept` called from the existing per-block control update path (never per sample, never allocating). Weight every delta by the voice's existing adaptiveRole scalar before combining. Combination rules, restated and binding:\n- Wet level (dB domain): `wet_eff_dB = clamp (wet_base_dB + d_macro_dB + d_scene_dB + adaptiveRole * wetLevelDeltaDb, wet_min_dB, wet_max_dB)`; smooth in dB and convert to linear only afterward via `g = 10^(G_dB/20)`.\n- T60 (octave-scaled): `t60_eff = clamp (t60_base * 2^(d_macro_oct + d_scene_oct + adaptiveRole * t60OctaveDelta), t60_min, t60_max)`; feed the existing feedback calculation `g = 10^(-3*T/T60)` and keep the existing hard cap `g_final = min (g_requested, 0.985f)`, including during Hold.\n- LPF cutoff (octave-scaled): `lpf_eff = clamp (lpf_base * 2^(d_macro_oct + d_scene_oct + adaptiveRole * lpfOctaveDelta), lpf_min, lpf_max)`; smooth multiplicatively because it is strictly positive.\n- Width (clamped linear addition): `width_eff = clamp (width_base + d_macro + d_scene + adaptiveRole * widthDelta, 0.0f, 2.0f)`.\n- Transient softening (clamped linear addition): `soften_eff = clamp (soften_base + d_macro + d_scene + adaptiveRole * softeningDelta, 0.0f, 1.0f)`.\n- Diffusion (clamped linear addition): `diffusion_eff = clamp (diffusion_base + d_macro + d_scene + adaptiveRole * diffusionDelta, 0.0f, 0.40f)`.\n\nSmoothing: each adaptive destination gets its OWN smoothing state. A single shared smoothing envelope across destinations is forbidden. Rising contraction uses the contraction attack time and falling contraction uses the contraction release time from the existing Intelligence parameters; bloom-driven destinations use the bloom rise, hold, and release times. dB, width, softening, and diffusion use linear SmoothedValue; T60 and LPF frequency use multiplicative SmoothedValue.\n\nThis path must never call setValueNotifyingHost and must never write base APVTS values. When `snapshot.mode == 0` (Off), all adaptive deltas are treated as exactly 0.0f so the effective values reduce bit-exactly to the non-adaptive computation. Nothing added here may allocate, lock, construct strings, or resize buffers inside processBlock.\n\nDo not modify PluginProcessor, CMakeLists.txt, tests, or anything under JUCE/.",
+  "acceptance_criteria": [
+    "Source/DSP/DelayVoice.h declares applyAdaptiveSnapshot (const AdaptiveSnapshot&, int) noexcept and Source/DSP/DelayVoice.cpp implements it",
+    "Wet level deltas are combined in the dB domain and converted to linear only after smoothing via 10^(G_dB/20)",
+    "T60 and LPF deltas are applied as power-of-two octave scaling and clamped to their existing ranges",
+    "Width is clamped to [0,2], transient softening to [0,1], and diffusion to [0,0.40] after clamped linear addition",
+    "The existing feedback hard cap min(g_requested, 0.985) still applies after adaptive T60 scaling, including during Hold",
+    "Each adaptive destination has its own smoothing state driven by the contraction attack/release or bloom rise/hold/release parameters; no single shared smoothing envelope is used across destinations",
+    "Source/DSP/DelayVoice.cpp contains no call to setValueNotifyingHost and no write to base APVTS values",
+    "When snapshot.mode is 0 (Off) every adaptive delta contributes exactly 0.0f",
+    "No heap allocation, lock, string construction, or buffer resize is added to any per-block or per-sample audio path in DelayVoice",
+    "cmake --build build --target ShredSpace_VST3 succeeds after this change",
+    "No file outside the task's allowed_write_paths is created or modified"
+  ],
+  "selected_backend": "codex_cli",
+  "verification_profile": "focused",
+  "allowed_write_paths": [
+    "Source/DSP/DelayVoice.h",
+    "Source/DSP/DelayVoice.cpp"
+  ],
+  "forbidden_changes": [
+    "modify any file under JUCE/",
+    "modify Source/Analysis/AdaptiveSnapshot.h",
+    "modify Source/PluginProcessor.h or Source/PluginProcessor.cpp",
+    "modify CMakeLists.txt or CMakePresets.json",
+    "call setValueNotifyingHost or otherwise rewrite base APVTS values from the adaptive path",
+    "use one shared smoothing envelope for multiple adaptive destinations",
+    "allocate memory, lock, construct strings, or resize buffers inside processBlock or the per-block control update",
+    "remove or bypass the 0.985 feedback hard cap",
+    "add any new third-party dependency"
+  ],
+  "allowed_symbols": [
+    "applyAdaptiveSnapshot",
+    "AdaptiveSnapshot",
+    "AdaptiveVoiceDeltas",
+    "adaptiveRole"
+  ],
+  "decision_budget": {
+    "allowed": [
+      "add private per-destination SmoothedValue members to DelayVoice",
+      "add private helper functions for dB-to-linear and octave scaling within DelayVoice",
+      "choose where in the existing per-block control update applyAdaptiveSnapshot is invoked"
+    ],
+    "forbidden": [
+      "change the DelayVoice public processing interface beyond adding applyAdaptiveSnapshot",
+      "change the repeat-loop signal order inside the feedback loop",
+      "introduce a new smoothing framework or replace juce::SmoothedValue",
+      "change the AdaptiveSnapshot schema"
+    ]
+  },
+  "dependencies": [
+    "h.1"
+  ],
+  "task_timeout_seconds": 2400,
+  "verification_commands": []
+}
