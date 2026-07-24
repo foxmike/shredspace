@@ -1,0 +1,338 @@
+{
+  "plan_name": "SHREDSPACE_1_0",
+  "purpose": "Build ShredSpace 1.0: a performance-responsive dual-voice stereo delay for articulate high-gain lead guitar, as a complete professional C++20 JUCE plugin. Product identity (binding, used consistently in CMake, plugin metadata, and state): project/plugin name ShredSpace, vendor nSpace Systems, version 1.0.0, manufacturer code NSPC, plugin code ShSp, bundle identifier com.nspacesystems.shredspace, LV2 URI urn:nspacesystems:plugin:shredspace. Targets built and verified now: Linux VST3, Linux LV2, Linux Standalone; a windows-msvc CMake preset is generated as configuration only, with the Windows build performed later on Windows tooling per the Aural Maximizer Pro workflow. JUCE is a git submodule at ./JUCE pinned to commit 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2 (the revision proven by Aural Maximizer Pro); no task modifies anything under JUCE/. Binding engineering rules restated into every materialized task where applicable: (1) real-time rules - inside processBlock no heap allocation, locks, file IO, profile parsing, string construction, GUI calls, unbounded loops, buffer resizing, FFT allocation, coefficient-object allocation, or destruction of heap-owned objects; all maximum-size buffers allocated in prepareToPlay; juce::ScopedNoDenormals at the top of processBlock. (2) Smoothing by domain - linear SmoothedValue for dB values, Mix, pan, width, signed offsets, normalized controls, cross-feedback, macro/scene/adaptive linear deltas, smoothing dB in dB and converting to linear only afterward via g = 10^(G_dB/20); multiplicative smoothing only for strictly positive values (filter frequency, T60, LFO rate); dedicated transition engines, never ordinary SmoothedValue, for large delay-time changes (Smooth/Bend), routing changes (30 ms wet-path crossfade), profile changes (morph), discrete topology changes, and Hold-loop transitions (30 ms equal-power). Initial smoothing times: gain and Mix 20 ms, filter frequency 50 ms, T60/feedback target 50 ms, width 50 ms, pan 30 ms, normalized expert controls 30 ms. (3) Layering - macros, scenes, and the adaptive engine compute deltas combined into internal effective values (linear: p_eff = clamp(p_base + d_macro + d_scene + d_adaptive, p_min, p_max); dB: same form in dB; octave-scaled: p_eff = clamp(p_base * 2^(d_macro_oct + d_scene_oct + d_adaptive_oct), p_min, p_max)); they never call setValueNotifyingHost on destinations and never rewrite base APVTS values; only explicit profile recall may replace base APVTS values, on the message thread. (4) Cross-thread - profile and adaptive numeric data crosses to the audio thread via two preallocated fixed-size POD buffers with atomic active-index and generation published with release semantics and read with acquire semantics; never std::atomic<std::shared_ptr>; strings and metadata never enter audio-thread snapshots; scalar telemetry via atomics; juce::AbstractFifo only for time-series history where overflow is acceptable. (5) The binding repeat-loop order inside each voice's feedback loop is: fractional delay read, HPF, LPF, Presence Guard, repeat transient softener, mild saturation, restricted diffusion, feedback tap. (6) Feedback is T60-derived, g = 10^(-3*T/T60), always hard-capped at g_final = min(g_requested, 0.985) including during Hold. (7) The performance analyzer runs at a fixed internal 48000 Hz analysis rate behind an anti-alias filter and stateful sample-rate converter regardless of host rate. (8) Delay read positions are always clamped to [8 samples, 8.25 seconds]; maximum delay buffers are 8.25 seconds per channel (about 25.3 MB total at 192 kHz for 2 voices x 2 channels x 32-bit float, which is acceptable). (9) Supported bus layouts are mono-mono, mono-stereo, and stereo-stereo; dry mono input remains center-equivalent in stereo, width is created in the wet path, and unused output channels are initialized deterministically. (10) Testing uses the built-in juce::UnitTest framework with a console runner target executed through CTest; Catch2, GoogleTest, and all other third-party frameworks are forbidden; no new third-party dependency of any kind may be introduced. (11) Because no C++ language adapter exists in the abracapocus registry, every task and phase verification uses explicit cmake configure, cmake --build, and ctest commands appropriate to the touched targets, never the C adapter's default make/cppcheck suggestions. (12) No artist or song names appear in any source file, resource, or profile. Materialized tasks must restate their applicable equations, ranges, defaults, file ownership, forbidden changes, and acceptance criteria directly; no task may say merely 'implement according to the product plan' or receive broad authority over adjacent features.",
+  "async_strategy": "Phases run sequentially a through k. Within each phase, Wave 1 tasks create disjoint new module files and run in parallel; later waves handle integration and shared fan-in files (CMakeLists.txt, CMakePresets.json, PluginProcessor.*, PluginEditor.*, DelayVoice.*, RoutingEngine.*, FeedbackController.*, ParameterLayout.*), each of which has exactly one owner per wave with same-phase writes serialized via dependencies. Every CMakeLists.txt edit after phase a is a serialized fan-in write; test tasks that register test files in CMakeLists.txt are serialized against each other and against the phase's integration task. The final wave of each phase is the phase's test task or verification artifact, depending on all prior tasks in the phase. No cross-phase task dependencies are declared; phase ordering provides sequencing.",
+  "cost_estimate": "66 tasks at low per-task cost via cheap-first routing split in thirds: codex_cli on account default for DSP mathematics, real-time contracts, and integration seams; antigravity_cli on account default for GUI, structural modules, and header-centric work; pi_cli via OpenRouter GLM 5.21 for standard implementation and test authoring, with the two easiest documentation tasks on Gemma. No Anthropic-model execution.",
+  "operator_questions": [
+    "Validate the pi_cli OpenRouter model string 'openrouter/z-ai/glm-5.21' through the pi execution path before executing phase a. If the provider rejects it and suggests an exact identifier, update every pi_cli task with a single plan-patch --default invocation. 'openrouter/google/gemma-4-31b-it' is already an empirically validated identifier.",
+    "cmake is not on the system PATH (only CLion's bundled copy). Put cmake and ctest on PATH before executing phase a, or every verification command in the plan will fail.",
+    "The target repository must exist with the JUCE submodule initialized at ./JUCE and checked out to commit 7c9d3783b127263d72bb65fe0a7e2dc8a02a7ac2 before phase a executes; phase a's CMake task consumes the submodule and must not fetch, update, or modify it.",
+    "Set ABRACAPOCUS_WORKING_ROOT to the plugin repository root and PROJECT_NAME to shredspace before plan-materialize and before every execution command, per standard operating procedure.",
+    "No C++ adapter exists in the abracapocus language registry; this plan compensates with explicit cmake/ctest verification commands and exhaustive per-task inspect lists. Adapter-level context extraction for .cpp files is unavailable, so operator review of materialized tasks should confirm each task's 'Before editing, inspect:' block lists every header the task consumes.",
+    "Real-guitar evaluation and profile tuning (dry attack clarity, repeated-note clutter, pumping, mono compatibility, bloom timing, profile usefulness, tested after high-gain amp or NAM processing in REAPER, Studio One, Bitwig, and Standalone at 44.1/48/96 kHz) is operator listening work after phase k completes and before release; bundled profiles ship with engineering starting values and are not release-ready merely because the JSON parses. The later Windows MSVC build follows the Aural Maximizer Pro workflow."
+  ],
+  "phases": [
+    {
+      "phase_id": "a",
+      "goal": "Establish the buildable plugin scaffold with exact product identity and all target formats. Source/PluginProcessor.h/.cpp: minimal AudioProcessor shell whose isBusesLayoutSupported accepts exactly mono-in/mono-out, mono-in/stereo-out, and stereo-in/stereo-out; processBlock clears every output channel beyond the input channel count deterministically before any processing so no uninitialized channel can reach the host; prepareToPlay/releaseResources stubs ready for later allocation; juce::ScopedNoDenormals at the top of processBlock from the start. Source/PluginEditor.h/.cpp: minimal resizable editor connected to the processor. CMakeLists.txt: juce_add_plugin with PRODUCT_NAME ShredSpace, COMPANY_NAME 'nSpace Systems', VERSION 1.0.0, PLUGIN_MANUFACTURER_CODE NSPC, PLUGIN_CODE ShSp, BUNDLE_ID com.nspacesystems.shredspace, LV2URI urn:nspacesystems:plugin:shredspace, FORMATS VST3 LV2 Standalone, CXX_STANDARD 20, consuming the existing ./JUCE submodule via add_subdirectory without touching it. CMakePresets.json: linux-release (Release, build directory build/linux-release) and windows-msvc (configuration only, not built in this plan). scripts/build_all.sh: paste-and-run with zero editing and no placeholders, configures with cmake --preset linux-release, builds all three Linux targets, and checks that the VST3, LV2, and Standalone artifacts exist, printing explicit pass/fail per artifact; no 'set -e'. .gitignore covers build directories and IDE state. Verification throughout this phase is explicit: cmake --preset linux-release, cmake --build build/linux-release, artifact existence checks. The phase verification artifact docs/verification/phase_a_scaffold.md records the exact commands executed and results.",
+      "expected_changed_files": [
+        "Source/PluginProcessor.h",
+        "Source/PluginProcessor.cpp",
+        "Source/PluginEditor.h",
+        "Source/PluginEditor.cpp",
+        "CMakeLists.txt",
+        "CMakePresets.json",
+        "scripts/build_all.sh",
+        ".gitignore",
+        "docs/verification/phase_a_scaffold.md"
+      ],
+      "async_notes": "Wave 1: a.1 creates Source/PluginProcessor.h/.cpp alone. Wave 2: a.2 creates Source/PluginEditor.h/.cpp, which includes the processor header (a.2 depends on a.1). Wave 3: a.3 creates CMakeLists.txt and CMakePresets.json referencing the four shell sources (a.3 depends on a.2). Wave 4: a.4 creates scripts/build_all.sh and .gitignore (a.4 depends on a.3). Final wave: a.5 writes docs/verification/phase_a_scaffold.md recording executed commands (a.5 depends on a.4).",
+      "risk_notes": "CMakeLists.txt and CMakePresets.json are single-owner (a.3) this phase. The bus-layout contract and deterministic output-channel initialization land in a.1 because retrofitting layouts later breaks host behavior. Identity codes NSPC/ShSp and the LV2 URI are frozen here; changing them later breaks user sessions.",
+      "estimated_task_count": 5,
+      "task_hints": [
+        { "title": "Create processor shell with bus layout contract and deterministic channel init", "selected_backend": "antigravity_cli" },
+        { "title": "Create editor shell connected to processor", "selected_backend": "antigravity_cli" },
+        { "title": "Create CMake build with product identity presets and three Linux formats", "selected_backend": "codex_cli" },
+        { "title": "Create paste and run build script and gitignore", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Write phase a scaffold verification document", "selected_backend": "pi_cli", "model": "openrouter/google/gemma-4-31b-it" }
+      ]
+    },
+    {
+      "phase_id": "b",
+      "goal": "Implement the complete parameter system with stable IDs frozen in this phase. Source/Parameters/ParameterIDs.h: every automatable parameter ID as a constant, grouped GLOBAL_*, PERF_*, TIME_*, VOICE_A_*, VOICE_B_*, INTEL_*, STEREO_*, SCENE_*, plus a state schema version constant. Public performance parameters: input gain -24..+24 dB default 0, output gain -24..+24 dB default 0, Mix 0-100% default 22%, bypass Off default, bypass mode Hard/Trails default Trails, mix mode Insert/Send default Insert, adaptive mode Off/Level/Articulation default Articulation, routing Parallel/AtoB/BtoA default Parallel, tap (momentary), Hold momentary-or-latch default Momentary, spillover On, safety RMS limiter On, low-frequency mono On, LF mono crossover 60-500 Hz default 180 Hz, and the eight macros: TIME 20-2000 ms or sync division default 380 ms, SPACE 0-100% default 40%, DEFINITION 0-100% default 65%, BLOOM 0-100% default 45%, TAIL 0.15-12 s default 2.8 s, FOCUS 0-100% default 55%, WIDTH 0-100% default 65%, CHARACTER 0-100% default 30%, plus scene selection and scene morph. Expert per-voice parameters with Voice A / Voice B defaults respectively: enable On/On, time ratio 0.25-4.0 (0.5 / 1.0), fine offset -50..+50 ms (0/0), level -60..0 dB (-12 / -10), tail scale 0.25-4.0 (0.65 / 1.2), adaptive role 0-100% (40 / 85), pan -100..+100 (-20 / +20), width 0-200% (60 / 130), stereo offset 0-30 ms (3 / 11), cross-feedback 0-100% (15 / 35), modulation phase 0-180 deg (90 / 180), HPF 40-1500 Hz (180 / 220), LPF 2-20 kHz (6500 / 5500), presence frequency 1.5-6 kHz (3200 / 3200), presence guard 0-12 dB (4 / 5), attack softening 0-100% (30 / 40), modulation rate 0.05-5 Hz (0.35 / 0.23), modulation depth 0-8 ms (0.4 / 0.7), drift 0-100% (10 / 15), diffusion 0-40% (8 / 12), saturation 0-100% (8 / 10). Expert intelligence parameters: sensitivity 0-100% default 55, input gate -80..-20 dB default -55, density window 200-1000 ms default 500, density start 1-8 ev/s default 3, density full 6-20 ev/s default 12, sustain start 50-800 ms default 180, sustain full 150-2000 ms default 650, phrase gap 20-500 ms default 120; contraction attack 1-100 ms default 8, contraction release 20-1000 ms default 220, wet reduction 0-18 dB default 8, tail reduction 0-2 oct default 1, tone darkening 0-2 oct default 0.75, width reduction 0-100% default 35, attack softening increase 0-100% default 45; bloom rise 20-1500 ms default 220, bloom hold 0-2000 ms default 350, bloom release 50-3000 ms default 800, wet lift 0-12 dB default 4, tail expansion 0-2 oct default 0.75, tone opening 0-1 oct default 0.35, width expansion 0-100% default 30, diffusion increase 0-30% default 12; transient-softener crossover 1000-6000 Hz default 2500; routing cascade amount; glide 5-1000 ms; time mode Milliseconds/HostSync/Tap with sync divisions Whole through Sixteenth plus dotted (x1.5) and triplet (x2/3). Internal state that must never appear in APVTS: detector running means and deviations, FFT history, onset timestamps, runtime activity/density/sustain/phrase-gap values, macro destination tables, scene names, profile names/descriptions/tags, migration metadata, telemetry values, safety intervention state, delay-buffer contents, resampler state. Source/Parameters/ParameterLayout.h/.cpp builds the full APVTS layout from these definitions, constructed across three serialized tasks by parameter group. Source/Parameters/ParameterSnapshot.h/.cpp provides the per-block real-time-safe value snapshot with domain-correct smoothing exactly per the purpose rules (linear for dB/pan/width/signed/normalized with dB-to-linear conversion after smoothing at the stated initial times; multiplicative only for strictly positive frequency/T60/rate; delay time excluded entirely because Smooth/Bend owns it). PluginProcessor gains APVTS ownership, getStateInformation/setStateInformation via the ValueTree with the schema version, and prepareToPlay allocation of the snapshot. tests/TestMain.cpp is the juce::UnitTest console runner registered as a CTest target; tests/ParameterTests.cpp verifies every ID exists in the layout, ranges and defaults match the values above, internal-state names are absent from APVTS, and state round-trips through get/setStateInformation exactly.",
+      "expected_changed_files": [
+        "Source/Parameters/ParameterIDs.h",
+        "Source/Parameters/ParameterLayout.h",
+        "Source/Parameters/ParameterLayout.cpp",
+        "Source/Parameters/ParameterSnapshot.h",
+        "Source/Parameters/ParameterSnapshot.cpp",
+        "Source/PluginProcessor.h",
+        "Source/PluginProcessor.cpp",
+        "tests/TestMain.cpp",
+        "tests/ParameterTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: b.1 creates ParameterIDs.h alone. Wave 2: b.2 creates ParameterLayout.h/.cpp containing the global, performance-macro, timing, stereo, and scene groups (b.2 depends on b.1). Wave 3: b.3 extends ParameterLayout.cpp with the complete Voice A and Voice B expert groups (b.3 depends on b.2, serialized same-file write). Wave 4: b.4 extends ParameterLayout.cpp with the intelligence detector, contraction, and bloom groups (b.4 depends on b.3, serialized same-file write). Wave 5: b.5 creates ParameterSnapshot.h/.cpp (b.5 depends on b.4). Wave 6: b.6 wires APVTS ownership, state save/restore, and snapshot allocation into PluginProcessor.h/.cpp and registers Parameters sources in CMakeLists.txt (b.6 depends on b.5). Final wave: b.7 creates tests/TestMain.cpp and tests/ParameterTests.cpp and adds the test-runner CTest target to CMakeLists.txt (b.7 depends on b.6, serializing the CMakeLists.txt write).",
+      "risk_notes": "Parameter IDs freeze permanently in b.1; every range and default must be transcribed exactly as stated in the goal, never invented, because changing IDs after release breaks automation and recall. Per-task focused verification is compile-only cmake builds of touched targets; ctest execution belongs to phase verification so backends do not retry-loop against test files created in the same task.",
+      "estimated_task_count": 7,
+      "task_hints": [
+        { "title": "Create frozen parameter ID taxonomy with schema version", "selected_backend": "antigravity_cli" },
+        { "title": "Create parameter layout with global macro timing stereo and scene groups", "selected_backend": "antigravity_cli" },
+        { "title": "Extend parameter layout with voice A and voice B groups", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Extend parameter layout with intelligence contraction and bloom groups", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Create domain correct smoothed parameter snapshot", "selected_backend": "codex_cli" },
+        { "title": "Wire APVTS state schema and allocation into processor", "selected_backend": "codex_cli" },
+        { "title": "Create unit test runner and parameter tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "c",
+      "goal": "Implement timing and the core delay engine. Source/DSP/FractionalDelay.h/.cpp: third-order Lagrange interpolation with coefficients L_minus1 = -mu*(mu-1)*(mu-2)/6, L_0 = (mu+1)*(mu-1)*(mu-2)/2, L_1 = -(mu+1)*mu*(mu-2)/2, L_2 = (mu+1)*mu*(mu-1)/6 for fractional position mu in [0,1); maximum buffers of 8.25 seconds per channel allocated in prepare and never resized in processing; every final read position clamped to [8 samples, 8.25 seconds]; per-sample fractional reads; multiple simultaneous read heads to support Smooth transitions; bounded modulation offsets; deterministic reset. Smooth mode: two read heads r_old at D_old and r_new at D_new combined by equal-power crossfade r = cos(pi*lambda/2)*r_old + sin(pi*lambda/2)*r_new with lambda ramping 0 to 1 over the glide time (glide range 5-1000 ms), producing no intentional pitch bend. Bend mode: one read position ramped D[n] = D_start + lambda[n]*(D_target - D_start), with playback-rate factor p(t) = 1 - dD/dt so decreasing delay raises pitch; Bend is exempt from the modulation pitch cap. Source/DSP/DelayTimeController.h/.cpp: owns time modes Milliseconds (D_samples = Fs*T_ms/1000), HostSync (T_quarter = 60/BPM, T = ratio*T_quarter, divisions Whole/Half/Quarter/Eighth/Sixteenth with dotted x1.5 and triplet x2/3), and Tap (median of a fixed K=5 interval history, intervals outside 100-3000 ms rejected); consumes the HostTiming POD struct defined in its header { double bpm; bool bpmValid; bool isPlaying; std::int64_t samplePosition; } which the processor fills once per block - DSP modules never query the host; when BPM is invalid, retain the last valid BPM, falling back to 120 BPM if none was ever received, never jumping to zero or undefined delay; computes per-voice targets T_voice = T_base*ratio + fineOffset (+ modulation and stereo offset applied downstream) and issues Smooth/Bend transition requests for large changes including host-tempo jumps, scene changes, and profile changes. Source/DSP/FeedbackController.h/.cpp: T60-derived feedback g_requested = 10^(-3*T/T60_voice) with T60_voice = T60_global * tailScale_voice, always returning g_final = min(g_requested, 0.985); the 0.985 hard ceiling is unconditional including Hold. Source/DSP/DelayVoice.h/.cpp: composes fractional delay, time-controller targets, and feedback into one stereo voice with the write path write = input + feedback. tests/DspCoreTests.cpp: impulse first-repeat placement at round(Fs*T) for 44.1, 48, 88.2, 96, and 192 kHz; fractional positions against independently computed Lagrange values; clamp tests proving negative effective time (short ratio plus negative fine offset) clamps to 8 samples and maximum clamps to 8.25 s; T60 decay measuring 20*log10(A(T60)/A(0)) approximately -60 dB within tolerance; tap median rejecting one outlier; BPM fallback behavior.",
+      "expected_changed_files": [
+        "Source/DSP/FractionalDelay.h",
+        "Source/DSP/FractionalDelay.cpp",
+        "Source/DSP/DelayTimeController.h",
+        "Source/DSP/DelayTimeController.cpp",
+        "Source/DSP/FeedbackController.h",
+        "Source/DSP/FeedbackController.cpp",
+        "Source/DSP/DelayVoice.h",
+        "Source/DSP/DelayVoice.cpp",
+        "tests/DspCoreTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: c.1 (FractionalDelay with Smooth/Bend read-head machinery), c.2 (FeedbackController), and c.3 (DelayTimeController with the HostTiming POD) run in parallel with disjoint files. Wave 2: c.4 (DelayVoice) composes all three (c.4 depends on c.1, c.2, c.3). Final wave: c.5 creates tests/DspCoreTests.cpp and registers all new DSP sources plus the test file in CMakeLists.txt (c.5 depends on c.4). CMakeLists.txt is owned only by c.5 in this phase.",
+      "risk_notes": "The Lagrange coefficients, the [8 samples, 8.25 s] clamp, and the 0.985 ceiling are correctness-critical for every later phase and must appear verbatim in materialized tasks. Smooth must not bend pitch and Bend must; the distinction is a product feature, not an implementation detail.",
+      "estimated_task_count": 5,
+      "task_hints": [
+        { "title": "Implement Lagrange fractional delay with clamps and smooth bend read heads", "selected_backend": "codex_cli" },
+        { "title": "Implement T60 feedback controller with hard ceiling", "selected_backend": "codex_cli" },
+        { "title": "Implement delay time controller with host timing pod and tap median", "selected_backend": "antigravity_cli" },
+        { "title": "Implement delay voice composing delay timing and feedback", "selected_backend": "codex_cli" },
+        { "title": "Create core delay tests with cmake registration", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "d",
+      "goal": "Implement the repeat tone chain and integrate its first four stages into DelayVoice in the binding order (fractional read, HPF, LPF, Presence Guard, transient softener, with saturation and diffusion slots reserved for phase e, then feedback tap). Source/DSP/RepeatToneProcessor.h/.cpp: RBJ biquads with shared values omega0 = 2*pi*f0/Fs and alpha = sin(omega0)/(2*Q), Q = 0.70710678; low-pass b0=(1-cos omega0)/2, b1=1-cos omega0, b2=b0, a0=1+alpha, a1=-2 cos omega0, a2=1-alpha; high-pass b0=(1+cos omega0)/2, b1=-(1+cos omega0), b2=b0, a0=1+alpha, a1=-2 cos omega0, a2=1-alpha; peaking with A=10^(G_dB/40), b0=1+alpha*A, b1=-2 cos omega0, b2=1-alpha*A, a0=1+alpha/A, a1=-2 cos omega0, a2=1-alpha/A; all normalized by a0; coefficients computed in double, audio in float, cutoff and gain smoothed, coefficients updated at a bounded control rate, no coefficient-object allocation on the audio thread, no linear interpolation between unrelated coefficient sets. Source/DSP/PresenceGuard.h/.cpp: band-pass around the presence frequency (1.5-6 kHz), squared-RMS state energy2[n] = alpha*energy2[n-1] + (1-alpha)*presence^2 (carrying energy2 as state, computing sqrt(max(energy2,0)+epsilon) only when reading so epsilon does not accumulate), level_dB = 20*log10(energy+epsilon), excess u = clamp((level_dB - threshold_dB)/kneeWidth_dB, 0, 1), smoothstep 3u^2 - 2u^3, cut_dB = -maxCut_dB * smoothed value driving a negative peaking filter; internal defaults threshold -24 dBFS, knee 12 dB, detector attack 5 ms, release 120 ms; user maximum cut 0-12 dB; FOCUS, DEFINITION, and Adaptive Role may raise the effective maximum cut. Source/DSP/RepeatTransientSoftener.h/.cpp: complementary high-band extraction z_high = HPF(z), z_low = z - z_high guaranteeing exact reconstruction at unity gain; crossover default 2500 Hz, expert range 1000-6000 Hz; fast/slow envelopes on abs(z_high) with time constants 1.5 ms and 35 ms via alpha = exp(-1/(tau*Fs)); transient = max(0, (fast-slow)/(slow+epsilon)); attenuation_dB = -maxAttenuation_dB * clamp(transient,0,1) with gain = 10^(attenuation_dB/20) applied only to the high band, output z_low + gain*z_high; Attack Softening 0-100% maps to 0-12 dB maximum high-band attenuation. Integration wires HPF, LPF, PresenceGuard, and the softener into DelayVoice's loop in binding order. tests/RepeatChainTests.cpp: HPF/LPF/peaking magnitude responses against RBJ expectations; softener bit-transparent within floating-point tolerance at zero amount, high-band attacks reduced and low-band body preserved at nonzero amounts; guard applies no cut below threshold, smoothly increasing cut above, respects maximum cut, and shows no epsilon-accumulation bias at steady state.",
+      "expected_changed_files": [
+        "Source/DSP/RepeatToneProcessor.h",
+        "Source/DSP/RepeatToneProcessor.cpp",
+        "Source/DSP/PresenceGuard.h",
+        "Source/DSP/PresenceGuard.cpp",
+        "Source/DSP/RepeatTransientSoftener.h",
+        "Source/DSP/RepeatTransientSoftener.cpp",
+        "Source/DSP/DelayVoice.h",
+        "Source/DSP/DelayVoice.cpp",
+        "tests/RepeatChainTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: d.1 (RepeatToneProcessor), d.2 (PresenceGuard), and d.3 (RepeatTransientSoftener) run in parallel with disjoint files. Wave 2: d.4 integrates the three modules into DelayVoice.h/.cpp in the binding chain order and registers new sources in CMakeLists.txt (d.4 depends on d.1, d.2, d.3). Final wave: d.5 creates tests/RepeatChainTests.cpp and registers it in CMakeLists.txt (d.5 depends on d.4, serializing the CMakeLists.txt write).",
+      "risk_notes": "All filters sit inside the feedback loop, so coefficient zippering compounds across repeats; the control-rate update rule with smoothed inputs is mandatory, not stylistic. The complementary-subtraction split is what guarantees the softener colors nothing at zero setting; a materialized task substituting a crossover pair without the subtraction identity is wrong.",
+      "estimated_task_count": 5,
+      "task_hints": [
+        { "title": "Implement RBJ biquad repeat tone processor", "selected_backend": "antigravity_cli" },
+        { "title": "Implement dynamic presence guard with state carried squared", "selected_backend": "codex_cli" },
+        { "title": "Implement complementary split transient softener", "selected_backend": "codex_cli" },
+        { "title": "Integrate tone guard and softener into delay voice in binding order", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Create repeat chain response and transparency tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "e",
+      "goal": "Implement motion, character, diffusion, and stereo processing, completing the binding repeat-chain order inside DelayVoice. Source/DSP/ModulationEngine.h/.cpp: per-voice per-channel sinusoidal modulation m = A_effective * sin(2*pi*rate*n/Fs + phase), rate range 0.05-5 Hz, user depth range 0-8 ms, right-channel phase = left + phaseOffset with offset range 0-180 degrees; the rack-character pitch cap: peak rate deviation = 2*pi*rateHz*depthSeconds, capped at maxRateDeviation = 2^(25/1200) - 1 (approximately 0.01455, i.e. 25 cents), so maxDepthForRate = maxRateDeviation/(2*pi*rateHz) and depthEffective = min(depthUser, maxDepthForRate) - deeper movement is available at slow rates, extreme wobble is prevented at fast rates, and Bend mode is exempt from this cap; random drift from bounded white noise in [-1,1] low-passed at 0.08 Hz cutoff via drift[n] = alphaDrift*drift[n-1] + (1-alphaDrift)*noise[n], combined m_total = m_LFO + driftAmount*drift, with the combined result clamped to the valid delay range. Source/DSP/SoftSaturator.h/.cpp: s_D(x) = tanh(D*x)/D with unity small-signal slope, drive D = 1 + 4*s for control s in [0,1], blend y = (1-s)*x + s*s_D(x); base-rate processing, no oversampling in 1.0, conservative drive, placed after LPF/guard/softening and before diffusion; small-signal loop gain must not exceed unity. Source/DSP/ShortDiffuser.h/.cpp: three first-order allpass stages per channel, H(z) = (-a + z^-M)/(1 - a*z^-M), difference equation y[n] = -a*x[n] + x[n-M] + a*y[n-M]; left delays 3.1/4.7/6.9 ms, right delays 3.7/5.3/7.9 ms, coefficients 0.45/0.38/0.32; user control d in [0, 0.40] where the 0.40 cap applies to the normalized blend before the equal-power law z_diff = cos(pi*d/2)*z + sin(pi*d/2)*allpass(z); bounded output, no independent late-reverb tail. Source/DSP/StereoProcessor.h/.cpp: constant-power pan gain_L = cos(pi*(p+1)/4), gain_R = sin(pi*(p+1)/4) for p in [-1,1]; mid/side width M=(L+R)/sqrt2, S=(L-R)/sqrt2, L_out=(M+w*S)/sqrt2, R_out=(M-w*S)/sqrt2 for w in [0,2]; low-frequency mono splitting each wet channel at the 60-500 Hz crossover (default 180 Hz), M_low=(L_low+R_low)/2, output M_low + high bands, dry path unaffected; correlation telemetry from smoothed sumLR/sumL2/sumR2 as correlation = sumLR/sqrt(sumL2*sumR2 + epsilon) clamped to [-1,1] for display. Integration completes the DelayVoice chain: saturation then diffusion after the softener, then the feedback tap. tests/MotionStereoTests.cpp: requested LFO rate and stereo phase; continuity and bounded delay positions; the 25-cent cap enforced at fast rates with deeper depth honored at slow rates; saturator transparent at zero, unity small-signal slope, finite output; diffuser bounded, near-unity magnitude, 0.40 cap honored; M/S width math exact at w=1; low-frequency mono behavior below and above crossover.",
+      "expected_changed_files": [
+        "Source/DSP/ModulationEngine.h",
+        "Source/DSP/ModulationEngine.cpp",
+        "Source/DSP/SoftSaturator.h",
+        "Source/DSP/SoftSaturator.cpp",
+        "Source/DSP/ShortDiffuser.h",
+        "Source/DSP/ShortDiffuser.cpp",
+        "Source/DSP/StereoProcessor.h",
+        "Source/DSP/StereoProcessor.cpp",
+        "Source/DSP/DelayVoice.h",
+        "Source/DSP/DelayVoice.cpp",
+        "tests/MotionStereoTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: e.1 (ModulationEngine), e.2 (SoftSaturator), e.3 (ShortDiffuser), and e.4 (StereoProcessor) run in parallel with disjoint files. Wave 2: e.5 integrates saturation and diffusion into DelayVoice.h/.cpp completing the binding order and registers new sources in CMakeLists.txt (e.5 depends on e.1, e.2, e.3, e.4). Final wave: e.6 creates tests/MotionStereoTests.cpp and registers it in CMakeLists.txt (e.6 depends on e.5).",
+      "risk_notes": "The 25-cent modulation cap is the difference between polished rack movement and chorus artifacts; it must be enforced in the engine, not documented as advice. Diffusion beyond three short stages or the 0.40 cap turns the product into a bad reverb and is forbidden.",
+      "estimated_task_count": 6,
+      "task_hints": [
+        { "title": "Implement modulation engine with rack pitch cap and drift", "selected_backend": "codex_cli" },
+        { "title": "Implement unity slope soft saturator", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Implement three stage restricted allpass diffuser", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Implement stereo processor with pan width lf mono and correlation", "selected_backend": "antigravity_cli" },
+        { "title": "Integrate saturation and diffusion completing delay voice chain", "selected_backend": "codex_cli" },
+        { "title": "Create motion and stereo tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "f",
+      "goal": "Close the full static audio path: routing, cross-feedback, safety, bypass, Hold, and complete processBlock integration, with the full loop tested in this phase. Source/DSP/RoutingEngine.h/.cpp: Parallel (both voices fed dry input, wet = level_A*out_A + level_B*out_B), A-into-B (input_B = cos(pi*cascade/2)*dry + sin(pi*cascade/2)*out_A) and the reversed B-into-A, with routing changes under a 30 ms wet-path crossfade and no bidirectional cascade loop; wet voice normalization N = sqrt(max(1, l_A^2 + l_B^2)), wet = (l_A*z_A + l_B*z_B)/N; global mixing Insert (dryGain = cos(pi*m/2), wetGain = sin(pi*m/2)) and Send (wet only). Cross-feedback in FeedbackController: feedback_L = g*((1-q)*z_L + q*z_R), feedback_R = g*(q*z_L + (1-q)*z_R) for q in [0,1] (q=0 independent, q=0.5 stereo average, q=1 ping-pong), eigenvalues g and g*(1-2q) so the 0.985 ceiling guarantees stability across the whole q range. Source/DSP/SafetyProcessor.h/.cpp with two layers: mandatory, never user-disableable - hard 0.985 feedback cap, NaN rejection, infinity rejection, DC blocker y[n] = x[n] - x[n-1] + R*y[n-1] with R = 0.995, invalid-state muting, bounded state reset, denormal handling; and the optional user-facing Safety RMS limiter - squared-energy state feedbackEnergy2[n] = alpha*feedbackEnergy2[n-1] + (1-alpha)*sample^2, level read as sqrt(max(energy2,0)+epsilon), threshold 0.90 linear, reduction = min(1, threshold/(energy+epsilon)), g_safe = min(0.985, g_requested*reduction), attack 2 ms, release 250 ms. Invalid-state response sequence: mute the affected wet output for the current block, reset lightweight filters/envelopes/detector states immediately, set an atomic safety-intervention flag, clear large delay buffers at a bounded block boundary or incrementally, never clear megabytes mid-block. Bypass in RoutingEngine: hard bypass fades the wet path out, retains dry, stops delay input, and clears the remaining tail after the transition completes; trails bypass stops new delay input via delayInput = (1 - bypassRamp)*input while the tail decays and dry continues; transitions are 20 ms and click-free. Hold in DelayVoice: on engage, new delay input goes to zero and the loop crossfades over 30 ms equal-power into a dedicated Hold path that bypasses HPF, LPF, Presence Guard, transient softening, saturation, and diffusion while retaining fractional delay, routing, stereo channel exchange, DC blocker, NaN/Inf rejection, the hard ceiling, and emergency safety; g_hold = 0.985 giving a long-decaying freeze whose tail does not progressively darken; release is click-free. processBlock in PluginProcessor composes: input gain g = 10^(G_dB/20), dry path preserved, per-block HostTiming acquisition, both DelayVoices, RoutingEngine, StereoProcessor, SafetyProcessor, global mix, output gain, across all three bus layouts with mono dry remaining center-equivalent and deterministic channel initialization, ScopedNoDenormals at top. Three serialized test files: tests/RoutingBypassTests.cpp (all topologies, click-free 30 ms routing transition, hard and trails bypass with dry preservation and no new input under trails, insert/send behavior); tests/SafetyHoldTests.cpp (impulses, full-scale tones, silence, denormal-range values, NaN, infinity, maximum feedback, DC - confirming no invalid output, no runaway, no hang, safety flag published, mandatory safety active with the RMS limiter disabled; Hold kills input, bypasses tone processing so the held tail stays spectrally stable, caps at 0.985, releases click-free); tests/StaticSignalPathTests.cpp (cross-feedback channel movement and stability at q = 0, 0.5, 1; mono-mono, mono-stereo with valid deterministic stereo output and centered dry, stereo-stereo; end-to-end impulse through the complete path; no output at zero tail).",
+      "expected_changed_files": [
+        "Source/DSP/RoutingEngine.h",
+        "Source/DSP/RoutingEngine.cpp",
+        "Source/DSP/FeedbackController.h",
+        "Source/DSP/FeedbackController.cpp",
+        "Source/DSP/SafetyProcessor.h",
+        "Source/DSP/SafetyProcessor.cpp",
+        "Source/DSP/DelayVoice.h",
+        "Source/DSP/DelayVoice.cpp",
+        "Source/PluginProcessor.h",
+        "Source/PluginProcessor.cpp",
+        "tests/RoutingBypassTests.cpp",
+        "tests/SafetyHoldTests.cpp",
+        "tests/StaticSignalPathTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: f.1 (RoutingEngine topologies, normalization, mixing) and f.3 (SafetyProcessor) run in parallel with disjoint files. Wave 2: f.2 adds the cross-feedback matrix to FeedbackController.h/.cpp (f.2 depends on f.1). Wave 3: f.4 adds hard/trails bypass and the 20 ms transitions to RoutingEngine.h/.cpp (f.4 depends on f.2, serialized RoutingEngine write after f.1), and f.5 adds the dedicated Hold preservation loop to DelayVoice.h/.cpp (f.5 depends on f.3). Wave 4: f.6 performs full processBlock integration in PluginProcessor.h/.cpp and registers new sources in CMakeLists.txt (f.6 depends on f.4, f.5). Waves 5-7 serialize CMakeLists.txt test registrations: f.7 (RoutingBypassTests) depends on f.6, f.8 (SafetyHoldTests) depends on f.7, f.9 (StaticSignalPathTests) depends on f.8. RoutingEngine.h/.cpp has serialized owners f.1 then f.4; DelayVoice.h/.cpp is owned only by f.5; PluginProcessor.h/.cpp only by f.6.",
+      "risk_notes": "This phase closes the feedback loop; stability is proven here on the full processed loop, not deferred. NaN injection occurs only inside unit tests. The Hold path bypassing the tone chain is a product behavior (freeze without progressive dulling), not an optimization, and must not be simplified away.",
+      "estimated_task_count": 9,
+      "task_hints": [
+        { "title": "Implement routing engine topologies normalization and global mixing", "selected_backend": "antigravity_cli" },
+        { "title": "Implement stereo cross feedback matrix in feedback controller", "selected_backend": "codex_cli" },
+        { "title": "Implement safety processor with mandatory and optional layers", "selected_backend": "codex_cli" },
+        { "title": "Implement hard and trails bypass with click free ramps", "selected_backend": "antigravity_cli" },
+        { "title": "Implement hold preservation loop bypassing tone chain", "selected_backend": "codex_cli" },
+        { "title": "Integrate complete static path into processBlock", "selected_backend": "codex_cli" },
+        { "title": "Create routing and bypass tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Create safety and hold tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Create static end to end signal path tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "g",
+      "goal": "Implement the performance analyzer at a fixed internal 48000 Hz analysis rate so detection behavior is equivalent at every host rate. Source/Analysis/AnalysisResampler.h/.cpp: analysis-band low-pass before rate conversion so content above the useful band (approximately 150 Hz - 8 kHz) cannot alias; a stateful converter handling both upsampling 44.1 kHz to 48 kHz and downsampling 88.2/96/176.4/192 kHz to 48 kHz, preserving state across blocks, using preallocated buffers and a phase accumulator, producing the correct long-term output rate, allocating nothing in processing, affecting only the analysis path, adding no reported latency to dry or wet audio. Source/Analysis/PerformanceAnalyzer.h/.cpp: analysis energy for stereo energy[n] = sqrt((L^2 + R^2)/2 + epsilon) and abs(x) for mono; fast (2 ms) and slow (60 ms) envelopes via alpha = exp(-1/(tau * 48000)); time-domain novelty = max(0, 20*log10((fast+eps)/(slow+eps))). Source/Analysis/OnsetDetector.h/.cpp: causal STFT with 512-sample Hann window (0.5*(1 - cos(2*pi*n/(N-1)))), hop 256, at the fixed rate (window 10.6667 ms, hop 5.3333 ms, bins 93.75 Hz), preallocated FFT storage; positive log-magnitude spectral flux averaged over bins spanning approximately 150 Hz - 8 kHz: (1/K)*sum(weight_k * max(0, log(|X_m[k]|+eps) - log(|X_m-1[k]|+eps))); per-feature adaptive normalization with running mean and running absolute deviation, z_i = max(0, (v_i - mean_i)/(deviation_i + eps)) over z_time (normalized time novelty), z_flux (normalized flux), and z_energy (normalized positive deviation of slow-envelope level in dB); onsetScore = sigmoid(w_time*z_time + w_flux*z_flux + w_energy*z_energy - threshold) with sigmoid 1/(1+exp(-x)) and initial weights w_time 0.35, w_flux 0.50, w_energy 0.15; acceptance via threshold crossing, local-maximum selection, noise-gate qualification, and a 25 ms refractory interval. Source/Analysis/DensityEstimator.h/.cpp: accepted onset timestamps in a fixed-size real-time-safe ring buffer; eventRate = onsetCount over the density window divided by the window; u = clamp((eventRate - densityStart)/(densityFull - densityStart), 0, 1); density = 3u^2 - 2u^3. Source/Analysis/SustainEstimator.h/.cpp: activity = smoothstep((inputLevel_dB - gate_dB)/gateWidth_dB); sustainTime = smoothstep((timeSinceLastOnset - sustainStart)/(sustainFull - sustainStart)); sustain = activity * sustainTime * (1 - density) * (1 - smoothedOnsetActivity), a continuous confidence, never a hard technique classification; plus the phrase-gap detector requiring recent prior activity, envelope below gate, and no accepted onset for the gap duration, output shaped by attack/hold/release, generating no audio itself. Source/Analysis/AdaptiveController.h/.cpp: C_target = clamp(densityWeight*density + onsetWeight*smoothedOnsetActivity, 0, 1); B_target = clamp(sustainWeight*sustain + gapWeight*phraseGap, 0, 1) * (1 - contraction); DEFINITION scales contraction, BLOOM scales bloom; each destination gets separate attack and release smoothing, never one shared envelope; the three adaptive modes exactly: Off forces contraction = bloom = 0 with telemetry allowed but zero audible effect (sample-identical to the static path within floating-point determinism); Level is traditional envelope-based wet ducking only (input activity, fast envelope, slow release, affecting wet level reduction and return exclusively - no flux, density, sustain, gap, tail, tone, width, or softening); Articulation is the full fusion engine; destination deltas computed per voice weighted by adaptiveRole in [0,1]: wet dB delta = -role*C*wetReduction_dB + role*B*wetLift_dB; T60 octave delta with T60_eff = T60_base * 2^(-role*C*tailReductionOct + role*B*tailExpansionOct) and feedback recomputed then capped at 0.985; LPF_eff = LPF_base * 2^(-role*C*toneDarkeningOct + role*B*toneOpeningOct); width_eff = clamp(base - role*C*widthReduction + role*B*widthExpansion, 0, 2); softening_eff = clamp(base + role*C*softeningIncrease, 0, 1); diffusion_eff = clamp(base + role*B*diffusionIncrease, 0, 0.40). tests/AnalysisTests.cpp: synthetic signals (isolated impulses; impulse trains at 2, 4, 8, 12, 16, 20 events/second; sustained sine; vibrato; amplitude tremolo; legato-like frequency changes; noise bursts; distorted guitar-like signals; gated silence) verifying density rises monotonically with event rate, sustained input develops sustain confidence, silence triggers phrase gap only after prior activity, vibrato does not continuously retrigger onsets, sub-gate noise does not trigger bloom, and the same material rendered at 44.1, 48, 96, and 192 kHz host rates produces equivalent analysis results within documented numerical tolerance (exact sample identity is not required after rational rate conversion).",
+      "expected_changed_files": [
+        "Source/Analysis/AnalysisResampler.h",
+        "Source/Analysis/AnalysisResampler.cpp",
+        "Source/Analysis/PerformanceAnalyzer.h",
+        "Source/Analysis/PerformanceAnalyzer.cpp",
+        "Source/Analysis/OnsetDetector.h",
+        "Source/Analysis/OnsetDetector.cpp",
+        "Source/Analysis/DensityEstimator.h",
+        "Source/Analysis/DensityEstimator.cpp",
+        "Source/Analysis/SustainEstimator.h",
+        "Source/Analysis/SustainEstimator.cpp",
+        "Source/Analysis/AdaptiveController.h",
+        "Source/Analysis/AdaptiveController.cpp",
+        "tests/AnalysisTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: g.1 (AnalysisResampler) creates the fixed-rate front end alone. Wave 2: g.2 (PerformanceAnalyzer) depends on g.1. Wave 3: g.3 (OnsetDetector), g.4 (DensityEstimator), and g.5 (SustainEstimator with phrase gap) run in parallel with disjoint files, all depending on g.2. Wave 4: g.6 (AdaptiveController) depends on g.3, g.4, g.5. Final wave: g.7 creates tests/AnalysisTests.cpp and registers all Analysis sources plus the test file in CMakeLists.txt (g.7 depends on g.6). CMakeLists.txt is owned only by g.7 in this phase.",
+      "risk_notes": "High-gain distortion flattens amplitude transients, so the fused detector must never rely on envelope novelty alone; the flux weight is the largest for that reason. Fixed-rate analysis is the sample-rate-invariance guarantee: FFT size and hop must never scale with host rate. All analyzer outputs are continuous confidences.",
+      "estimated_task_count": 7,
+      "task_hints": [
+        { "title": "Implement fixed rate analysis resampler with band limiting", "selected_backend": "codex_cli" },
+        { "title": "Implement analysis energy envelopes and time novelty", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Implement spectral flux onset detector with fused scoring", "selected_backend": "codex_cli" },
+        { "title": "Implement note density estimator with ring buffer", "selected_backend": "antigravity_cli" },
+        { "title": "Implement sustain confidence and phrase gap detector", "selected_backend": "antigravity_cli" },
+        { "title": "Implement adaptive controller with three modes and destination deltas", "selected_backend": "codex_cli" },
+        { "title": "Create analyzer synthetic and rate equivalence tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "h",
+      "goal": "Wire the adaptive engine into the audio path so analysis measurably changes the sound - the defining product behavior. Source/Analysis/AdaptiveSnapshot.h: fixed-size POD destination snapshot carrying contraction, bloom, mode, and per-voice wet dB delta, T60 octave delta, LPF octave delta, width delta, transient-softening delta, and diffusion delta; published through two preallocated buffers with atomic active index and generation counter using release semantics on write and acquire on read; no strings, no allocation, no destruction, no shared_ptr. DelayVoice consumes the snapshot each block, combining deltas with base values per the layering rules (dB addition for wet level; power-of-two octave scaling for T60 feeding the feedback calculation, then the 0.985 cap; power-of-two octave scaling for LPF; clamped linear addition for width to [0,2], softening to [0,1], diffusion to [0,0.40]), weighted by the voice's adaptiveRole, with per-destination smoothing driven by the contraction attack/release and bloom rise/hold/release parameters so adaptation never zippers; base APVTS values are never written by this path. PluginProcessor integrates the chain in processBlock at bounded control-rate cadence: feed the resampler from the pre-delay analysis tap, step analyzer, onset, density, sustain, and controller, publish the snapshot, and honor Off mode as a provably static path. tests/AdaptiveEndToEndTests.cpp: identical input renders measurably different output for DEFINITION 0% versus 100% on dense impulse-train input (wet level and effective tail contract); BLOOM 0% versus 100% on sustained input with a phrase gap (bloom increases, gaps reveal existing tail energy); Adaptive Mode Off versus Articulation; Off mode sample-identical to the static path within floating-point determinism; and macro, scene, and adaptive processing leave base destination APVTS values unchanged throughout.",
+      "expected_changed_files": [
+        "Source/Analysis/AdaptiveSnapshot.h",
+        "Source/DSP/DelayVoice.h",
+        "Source/DSP/DelayVoice.cpp",
+        "Source/PluginProcessor.h",
+        "Source/PluginProcessor.cpp",
+        "tests/AdaptiveEndToEndTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: h.1 creates Source/Analysis/AdaptiveSnapshot.h alone. Wave 2: h.2 applies snapshot deltas inside DelayVoice.h/.cpp (h.2 depends on h.1). Wave 3: h.3 integrates resampler feed, analysis stepping, and snapshot publication into PluginProcessor.h/.cpp (h.3 depends on h.2). Final wave: h.4 creates tests/AdaptiveEndToEndTests.cpp and registers it in CMakeLists.txt (h.4 depends on h.3).",
+      "risk_notes": "This phase guarantees the analyzer is not an orphan subsystem. Overreaction reads as pumping: per-destination attack and release come from the Intelligence parameters, and a single shared smoothing envelope across destinations is forbidden.",
+      "estimated_task_count": 4,
+      "task_hints": [
+        { "title": "Define pod adaptive snapshot with atomic double buffer publication", "selected_backend": "codex_cli" },
+        { "title": "Apply adaptive deltas to effective values inside delay voice", "selected_backend": "codex_cli" },
+        { "title": "Integrate analysis chain and snapshot publication into processBlock", "selected_backend": "codex_cli" },
+        { "title": "Create adaptive end to end difference tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "i",
+      "goal": "Implement profiles, macros, and scenes with their tests. Source/Profiles/ProfileSchema.h/.cpp: profile format with schema_version, product_version, profile_name, author, description, base_parameter_values, macro_mapping, scene_values, tags; validation requiring every referenced parameter ID to exist, unknown IDs handled by a defined migration rule, schema version checked, malformed profiles failing safely and never reaching the audio thread. Source/Profiles/ProfileManager.h/.cpp: loads bundled profiles from embedded binary data and user profiles from disk with all parsing and file IO strictly off the audio thread; profile recall is an explicit preset action that may replace base APVTS values on the message thread only. Source/Profiles/ProfileSnapshot.h/.cpp: real-time handoff as two preallocated fixed-size POD numeric snapshots with atomic active-index and generation under release/acquire semantics; the audio thread never sees strings, tags, or filenames and never allocates or destroys; std::atomic<std::shared_ptr> is forbidden. Source/Parameters/MacroEngine.h/.cpp: the eight macros (TIME, SPACE, DEFINITION, BLOOM, TAIL, FOCUS, WIDTH, CHARACTER) map to profile-supplied destination tables; for normalized macro value u in [0,1], each destination delta = delta_min + u_curved*(delta_max - delta_min) with u_curved = u^curve, curve > 0, default 1.0; deltas combine into effective values per the layering rules and never call setValueNotifyingHost or rewrite destination APVTS values; macro coordination follows the plan: SPACE coordinates voice levels, wet prominence, diffusion, and bloom availability; DEFINITION coordinates contraction strength destinations; BLOOM coordinates bloom strength destinations; FOCUS coordinates HPF, LPF, guard, and softening; WIDTH coordinates pan, width, offset, cross-feedback, modulation phase, and LF mono; CHARACTER coordinates saturation, modulation depth, drift, diffusion, attack softness, and bandwidth; TIME drives the DelayTimeController; TAIL sets nominal T60. Source/Profiles/SceneManager.h/.cpp: four scenes per profile (A Tight, B Open, C Bloom, D Special) storing the eight macro targets, Mix target, routing target, and Hold behavior; continuous values morph as delta_scene = scene_target - base_value applied internally without overwriting base macro APVTS values; linear morphing p = (1-lambda)*p_A + lambda*p_B for linear values; logarithmic morphing p = p_A*(p_B/p_A)^lambda only when both endpoints are strictly positive (frequency, time, T60, rate); discrete values (routing) switch under the wet-path crossfade, never numerically interpolated; delay-time changes route through Smooth/Bend; spillover preserves tails during scene changes. Twelve bundled profiles as JSON resources embedded via juce_add_binary_data with engineering starting values consistent with every parameter range: Precision Rack, Rapid Definition, Neoclassical Flight, Wide Arpeggio, Singing Lead, Dry Center Arena, Legato Space, Dark High-Gain, Ballad Bloom, Controlled Cascade, Mono Rig Polish, Buffer Bend; profile descriptions use behavior language only, and no artist or song name appears anywhere. tests/ProfileMacroSceneTests.cpp: all bundled profiles parse; every referenced ID exists; schema version checked; malformed profiles fail safely; unknown IDs follow the migration rule; loading performs no audio-thread IO; no artist or song names in shipped resources; every macro destination remains in range across the full macro sweep; macro movement does not rewrite destination APVTS values; curves and min/max mappings behave correctly; linear values morph linearly and positive time/frequency values logarithmically; discrete parameters switch under the crossfade; base macro values remain unchanged through scene morphs.",
+      "expected_changed_files": [
+        "Source/Profiles/ProfileSchema.h",
+        "Source/Profiles/ProfileSchema.cpp",
+        "Source/Profiles/ProfileManager.h",
+        "Source/Profiles/ProfileManager.cpp",
+        "Source/Profiles/ProfileSnapshot.h",
+        "Source/Profiles/ProfileSnapshot.cpp",
+        "Source/Parameters/MacroEngine.h",
+        "Source/Parameters/MacroEngine.cpp",
+        "Source/Profiles/SceneManager.h",
+        "Source/Profiles/SceneManager.cpp",
+        "Resources/Profiles/PrecisionRack.json",
+        "Resources/Profiles/RapidDefinition.json",
+        "Resources/Profiles/NeoclassicalFlight.json",
+        "Resources/Profiles/WideArpeggio.json",
+        "Resources/Profiles/SingingLead.json",
+        "Resources/Profiles/DryCenterArena.json",
+        "Resources/Profiles/LegatoSpace.json",
+        "Resources/Profiles/DarkHighGain.json",
+        "Resources/Profiles/BalladBloom.json",
+        "Resources/Profiles/ControlledCascade.json",
+        "Resources/Profiles/MonoRigPolish.json",
+        "Resources/Profiles/BufferBend.json",
+        "tests/ProfileMacroSceneTests.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: i.1 (ProfileSchema) and i.4 (MacroEngine, depending only on the frozen phase-b parameter system) run in parallel with disjoint files. Wave 2: i.2 (ProfileManager) depends on i.1. Wave 3: i.3 (ProfileSnapshot handoff) and i.5 (SceneManager) run in parallel with disjoint files, both depending on i.2 and i.4. Wave 4: i.6 creates the twelve Resources/Profiles JSON files and adds Profiles and MacroEngine sources plus juce_add_binary_data to CMakeLists.txt (i.6 depends on i.3, i.5). Final wave: i.7 creates tests/ProfileMacroSceneTests.cpp and registers it in CMakeLists.txt (i.7 depends on i.6). CMakeLists.txt has serialized sequential owners i.6 then i.7.",
+      "risk_notes": "The macros-never-rewrite-base-APVTS rule is this phase's central contract; an implementation writing macros through setValueNotifyingHost is wrong even if it sounds identical, because it breaks automation, undo, and recall. Profile numeric values are engineering starting points; real-guitar tuning is explicit operator work before release.",
+      "estimated_task_count": 7,
+      "task_hints": [
+        { "title": "Implement profile schema validation and migration rule", "selected_backend": "antigravity_cli" },
+        { "title": "Implement off thread profile manager for bundled and user profiles", "selected_backend": "antigravity_cli" },
+        { "title": "Implement pod double buffer profile snapshot handoff", "selected_backend": "codex_cli" },
+        { "title": "Implement eight macro delta engine over base parameters", "selected_backend": "codex_cli" },
+        { "title": "Implement scene manager with morph domains and spillover", "selected_backend": "antigravity_cli" },
+        { "title": "Create twelve bundled profile resources with binary embedding", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Create profile macro and scene tests", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" }
+      ]
+    },
+    {
+      "phase_id": "j",
+      "goal": "Implement the complete native JUCE GUI with four pages. Source/GUI/CustomLookAndFeel.h/.cpp: the visual identity implemented strictly against the LookAndFeel_V4 virtual signatures present in the vendored JUCE submodule on disk - in particular drawPopupMenuItem takes individual parameters (isSeparator, isActive, isHighlighted, isTicked, hasSubMenu, text, shortcutKeyText, icon, textColour), not a juce::PopupMenu::Item struct; every override verified against the actual vendored headers, never remembered API. Source/Telemetry/TelemetryState.h/.cpp: scalar latest-value telemetry as atomics (left/right peak, left/right RMS, activity, density, sustain, contraction, bloom, correlation, safety flag) plus a juce::AbstractFifo used only for detector time-series history where overflow is acceptable and never authoritative for current meter values; published from PluginProcessor with no locks or allocation on the audio side. Source/GUI/MeterComponent.h/.cpp: stereo output meters plus the activity, density, contraction, bloom, and safety indicator cluster reading TelemetryState on a GUI timer. Source/GUI/PerformancePage.h/.cpp: the eight macro controls, profile browser, four scene buttons, global Mix, input and output, bypass, tap tempo, Hold, adaptive mode, indicators, and meters. Source/GUI/VoicesPage.h/.cpp: complete Voice A and Voice B expert editing (enable, time ratio, fine offset, level, tail scale, adaptive role, pan, width, stereo offset, cross-feedback, HPF, LPF, Presence Guard, transient softening, modulation, drift, diffusion, saturation). Source/GUI/ToneMotionPage.h/.cpp: filter controls, Presence Guard controls, transient-softener controls, saturation, modulation rate and depth, drift, diffusion, stereo behavior, and the low-frequency mono crossover. Source/GUI/IntelligencePage.h/.cpp with Source/GUI/DetectorDisplay.h/.cpp: sensitivity, input gate, density window and thresholds, sustain thresholds, phrase-gap timing, contraction response, bloom response, and the adaptation destination amounts, with live onset/density/sustain/gap visualization fed from the telemetry history FIFO. Each page owns its own APVTS attachments; macro controls talk to the MacroEngine and never directly write coordinated destination parameters. PluginEditor assembles four-page navigation in a resizable layout. GUI code never runs on the audio thread and reads audio data only through TelemetryState.",
+      "expected_changed_files": [
+        "Source/GUI/CustomLookAndFeel.h",
+        "Source/GUI/CustomLookAndFeel.cpp",
+        "Source/Telemetry/TelemetryState.h",
+        "Source/Telemetry/TelemetryState.cpp",
+        "Source/PluginProcessor.h",
+        "Source/PluginProcessor.cpp",
+        "Source/GUI/MeterComponent.h",
+        "Source/GUI/MeterComponent.cpp",
+        "Source/GUI/PerformancePage.h",
+        "Source/GUI/PerformancePage.cpp",
+        "Source/GUI/VoicesPage.h",
+        "Source/GUI/VoicesPage.cpp",
+        "Source/GUI/ToneMotionPage.h",
+        "Source/GUI/ToneMotionPage.cpp",
+        "Source/GUI/IntelligencePage.h",
+        "Source/GUI/IntelligencePage.cpp",
+        "Source/GUI/DetectorDisplay.h",
+        "Source/GUI/DetectorDisplay.cpp",
+        "Source/PluginEditor.h",
+        "Source/PluginEditor.cpp",
+        "CMakeLists.txt"
+      ],
+      "async_notes": "Wave 1: j.1 (CustomLookAndFeel) and j.2 (TelemetryState plus its publication from PluginProcessor.h/.cpp) run in parallel with disjoint files. Wave 2: j.3 (MeterComponent) depends on j.1 and j.2. Wave 3: j.4 (PerformancePage), j.5 (VoicesPage), j.6 (ToneMotionPage), and j.7 (IntelligencePage plus DetectorDisplay) run in parallel with disjoint files, all depending on j.3. Final wave: j.8 assembles PluginEditor.h/.cpp with four-page navigation and registers all GUI and Telemetry sources in CMakeLists.txt (j.8 depends on j.4, j.5, j.6, j.7). PluginProcessor.h/.cpp is owned only by j.2 and PluginEditor.h/.cpp plus CMakeLists.txt only by j.8 in this phase.",
+      "risk_notes": "The drawPopupMenuItem signature mismatch against the vendored JUCE revision is a known prior failure mode from Aural Maximizer Pro; overrides must be checked against the submodule headers on disk. Source/Telemetry is the thin layer keeping DSP and GUI independent; neither may include the other directly.",
+      "estimated_task_count": 8,
+      "task_hints": [
+        { "title": "Implement custom look and feel against vendored signatures", "selected_backend": "antigravity_cli" },
+        { "title": "Implement telemetry state with atomics and history fifo", "selected_backend": "antigravity_cli" },
+        { "title": "Implement meter component and indicator cluster", "selected_backend": "antigravity_cli" },
+        { "title": "Implement performance page", "selected_backend": "antigravity_cli" },
+        { "title": "Implement voices page", "selected_backend": "antigravity_cli" },
+        { "title": "Implement tone and motion page", "selected_backend": "antigravity_cli" },
+        { "title": "Implement intelligence page and detector display", "selected_backend": "antigravity_cli" },
+        { "title": "Assemble plugin editor with four page navigation", "selected_backend": "antigravity_cli" }
+      ]
+    },
+    {
+      "phase_id": "k",
+      "goal": "Final validation and release verification on Linux. scripts/validate_plugin.sh: paste-and-run with zero editing and no placeholders; reconfigures and rebuilds all three Linux targets via cmake --preset linux-release and cmake --build, runs the complete unit-test suite through ctest with failure propagation, verifies VST3, LV2, and Standalone artifact existence with explicit per-artifact pass/fail output, and prints a final summary; no 'set -e'. tests/StateRoundTripTests.cpp: set non-default values across every APVTS group, select a non-default profile and scene, serialize processor state, construct a fresh processor, restore, and verify exact parameter, profile, and scene equality including the schema version. docs/verification/phase_k_release.md: records the executed command matrix (configure, build, full ctest, artifact checks) with results, and the explicit remaining operator work before release: real-guitar evaluation after high-gain amp or NAM processing covering alternate picking, economy picking, sweep arpeggios, legato, tapping, bends, wide vibrato, held notes, phrase endings, chords, palm-muted rhythms, sustained feedback, string noise, and gated silence, judged for dry attack clarity, repeated-note clutter, upper-mid buildup, pumping, width, mono compatibility, bloom timing, sustained-note size, and profile usefulness, at 44.1/48/96 kHz in REAPER, Studio One, Bitwig, and Standalone across VST3 and LV2; profile tuning updates to the bundled resources based on that evaluation; and the later Windows MSVC build via the Aural Maximizer Pro workflow. Profiles are not release-ready merely because the JSON parses.",
+      "expected_changed_files": [
+        "scripts/validate_plugin.sh",
+        "tests/StateRoundTripTests.cpp",
+        "CMakeLists.txt",
+        "docs/verification/phase_k_release.md"
+      ],
+      "async_notes": "Wave 1: k.1 creates scripts/validate_plugin.sh alone. Wave 2: k.2 creates tests/StateRoundTripTests.cpp and registers it in CMakeLists.txt (k.2 depends on k.1). Final wave: k.3 executes the validation script and writes docs/verification/phase_k_release.md (k.3 depends on k.2).",
+      "risk_notes": "The state round-trip test is the release gate for spec stability: any parameter, profile, or scene state that fails exact restoration is a shipping blocker. The verification document must record real executed commands and results, never aspirational ones.",
+      "estimated_task_count": 3,
+      "task_hints": [
+        { "title": "Create full validation script with build test and artifact checks", "selected_backend": "codex_cli" },
+        { "title": "Create state round trip tests across all groups", "selected_backend": "pi_cli", "model": "openrouter/z-ai/glm-5.21" },
+        { "title": "Write phase k release verification document", "selected_backend": "pi_cli", "model": "openrouter/google/gemma-4-31b-it" }
+      ]
+    }
+  ]
+}
