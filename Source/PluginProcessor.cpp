@@ -1,8 +1,5 @@
 #include "PluginProcessor.h"
-
-#if __has_include("PluginEditor.h")
- #include "PluginEditor.h"
-#endif
+#include "PluginEditor.h"
 
 ShredSpaceAudioProcessor::ShredSpaceAudioProcessor()
     : juce::AudioProcessor (BusesProperties()
@@ -115,12 +112,7 @@ bool ShredSpaceAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* ShredSpaceAudioProcessor::createEditor()
 {
-#if __has_include("PluginEditor.h")
     return new ShredSpaceAudioProcessorEditor (*this);
-#else
-    // TODO(a.2): return new ShredSpaceAudioProcessorEditor (*this);
-    return nullptr;
-#endif
 }
 
 void ShredSpaceAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
