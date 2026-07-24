@@ -85,10 +85,12 @@ add_executable(ShredSpaceTests
     tests/ParameterTests.cpp
     tests/DspCoreTests.cpp
     tests/RepeatChainTests.cpp
+    tests/MotionStereoTests.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters/ParameterLayout.cpp
     Source/Parameters/ParameterSnapshot.cpp
+    Source/DSP/ShortDiffuser.cpp
 )
 
 target_include_directories(ShredSpaceTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
