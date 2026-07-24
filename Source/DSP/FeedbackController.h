@@ -1,5 +1,7 @@
 #pragma once
 
+#include <juce_audio_basics/juce_audio_basics.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -18,6 +20,13 @@ class FeedbackController
 public:
     static constexpr double kMaxFeedbackGain = 0.985;
     static constexpr double kT60SmoothingTimeSeconds = 0.050;
+    static constexpr double kCrossFeedbackSmoothingTimeSeconds = 0.030;
+
+    struct StereoFeedback
+    {
+        float left {};
+        float right {};
+    };
 
     FeedbackController() = default;
 
@@ -30,11 +39,24 @@ public:
     /** Sets the global T60 target used by subsequent processing calls. */
     void setT60Target (double T60GlobalSeconds) noexcept;
 
+    /** Sets the normalized stereo cross-feedback amount in [0, 1]. */
+    void setCrossFeedback (float q) noexcept;
+
     /**
      * Advances T60 smoothing by one sample and returns this voice's gain.
      */
     [[nodiscard]] double processSample (double delayTimeSeconds,
                                         double tailScaleVoice) noexcept;
+
+    /**
+     * Advances T60 and cross-feedback smoothing by one sample, then applies
+     * the stereo feedback matrix to the current left and right loop taps.
+     */
+    [[nodiscard]] StereoFeedback processStereoSample (
+        float zLeft,
+        float zRight,
+        double delayTimeSeconds,
+        double tailScaleVoice) noexcept;
 
     /**
      * Advances T60 smoothing by numSamples and returns this voice's gain.
@@ -67,6 +89,9 @@ private:
     double smoothingCoefficient_ {};
     double smoothedLogT60_ {};
     double targetLogT60_ {};
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>
+        crossFeedbackSmoother_;
+    float crossFeedbackTarget_ {};
 };
 
 } // namespace shredspace

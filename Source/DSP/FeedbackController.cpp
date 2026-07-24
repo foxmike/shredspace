@@ -12,6 +12,9 @@ void FeedbackController::prepare (double sampleRate) noexcept
         std::isfinite (sampleRate) ? std::max (1.0, sampleRate) : 1.0;
     smoothingCoefficient_ =
         std::exp (-1.0 / (kT60SmoothingTimeSeconds * safeSampleRate));
+    crossFeedbackSmoother_.reset (
+        safeSampleRate, kCrossFeedbackSmoothingTimeSeconds);
+    crossFeedbackSmoother_.setCurrentAndTargetValue (crossFeedbackTarget_);
 }
 
 void FeedbackController::reset (double T60GlobalSeconds) noexcept
@@ -19,11 +22,19 @@ void FeedbackController::reset (double T60GlobalSeconds) noexcept
     const auto safeT60 = sanitiseT60 (T60GlobalSeconds);
     smoothedLogT60_ = std::log (safeT60);
     targetLogT60_ = smoothedLogT60_;
+    crossFeedbackSmoother_.setCurrentAndTargetValue (crossFeedbackTarget_);
 }
 
 void FeedbackController::setT60Target (double T60GlobalSeconds) noexcept
 {
     targetLogT60_ = std::log (sanitiseT60 (T60GlobalSeconds));
+}
+
+void FeedbackController::setCrossFeedback (float q) noexcept
+{
+    crossFeedbackTarget_ =
+        std::isfinite (q) ? std::clamp (q, 0.0f, 1.0f) : 0.0f;
+    crossFeedbackSmoother_.setTargetValue (crossFeedbackTarget_);
 }
 
 double FeedbackController::processSample (double delayTimeSeconds,
@@ -33,6 +44,23 @@ double FeedbackController::processSample (double delayTimeSeconds,
     return calculateGain (getSmoothedT60(),
                           tailScaleVoice,
                           delayTimeSeconds);
+}
+
+FeedbackController::StereoFeedback FeedbackController::processStereoSample (
+    float zLeft,
+    float zRight,
+    double delayTimeSeconds,
+    double tailScaleVoice) noexcept
+{
+    const auto gain = static_cast<float> (
+        processSample (delayTimeSeconds, tailScaleVoice));
+    const float q = crossFeedbackSmoother_.getNextValue();
+    const float direct = 1.0f - q;
+
+    return {
+        gain * (direct * zLeft + q * zRight),
+        gain * (q * zLeft + direct * zRight)
+    };
 }
 
 double FeedbackController::processBlock (double delayTimeSeconds,
