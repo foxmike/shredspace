@@ -20,6 +20,9 @@ void DelayVoice::prepare (double sampleRate, int maxBlockSize)
     repeatTone_.prepare (sampleRate_, maxBlockSize, 2);
     presenceGuard_.prepare (sampleRate_, maxBlockSize, 2);
     repeatSoftener_.prepare (sampleRate_, maxBlockSize, 2);
+    leftSaturator_.prepare (sampleRate_, maxBlockSize);
+    rightSaturator_.prepare (sampleRate_, maxBlockSize);
+    shortDiffuser_.prepare (sampleRate_, maxBlockSize);
 
     reset();
 }
@@ -32,6 +35,9 @@ void DelayVoice::reset() noexcept
     repeatTone_.reset();
     presenceGuard_.reset();
     repeatSoftener_.reset();
+    leftSaturator_.reset();
+    rightSaturator_.reset();
+    shortDiffuser_.reset();
     previousLoopOutputLeft_ = 0.0f;
     previousLoopOutputRight_ = 0.0f;
     hasTimeTarget_ = false;
@@ -40,6 +46,17 @@ void DelayVoice::reset() noexcept
 void DelayVoice::setT60Target (double T60GlobalSeconds) noexcept
 {
     feedbackController_.setT60Target (T60GlobalSeconds);
+}
+
+void DelayVoice::setSaturationAmount (float s) noexcept
+{
+    leftSaturator_.setAmount (s);
+    rightSaturator_.setAmount (s);
+}
+
+void DelayVoice::setDiffusionAmount (float d) noexcept
+{
+    shortDiffuser_.setAmount (d);
 }
 
 void DelayVoice::process (float* left,
@@ -97,15 +114,13 @@ void DelayVoice::process (float* left,
         loopLeft = repeatSoftener_.processSample (0, loopLeft);
         loopRight = repeatSoftener_.processSample (1, loopRight);
 
-        // 6. Mild saturation -- RESERVED SLOT for phase e.
-        //    Pass-through placeholder: no implementation yet.
-        // loopLeft = mildSaturation (loopLeft);
-        // loopRight = mildSaturation (loopRight);
+        // 6. Mild saturation (unity small-signal slope; no makeup gain).
+        loopLeft = leftSaturator_.processSample (loopLeft);
+        loopRight = rightSaturator_.processSample (loopRight);
 
-        // 7. Restricted diffusion -- RESERVED SLOT for phase e.
-        //    Pass-through placeholder: no implementation yet.
-        // loopLeft = restrictedDiffusion (loopLeft);
-        // loopRight = restrictedDiffusion (loopRight);
+        // 7. Restricted diffusion.
+        loopLeft = shortDiffuser_.processSample (loopLeft, 0);
+        loopRight = shortDiffuser_.processSample (loopRight, 1);
 
         // 8. Feedback tap -- final loop output stored for the next sample.
         previousLoopOutputLeft_ = loopLeft;

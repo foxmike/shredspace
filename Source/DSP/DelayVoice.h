@@ -6,6 +6,8 @@
 #include "DSP/RepeatToneProcessor.h"
 #include "DSP/PresenceGuard.h"
 #include "DSP/RepeatTransientSoftener.h"
+#include "DSP/SoftSaturator.h"
+#include "DSP/ShortDiffuser.h"
 
 namespace shredspace
 {
@@ -39,6 +41,12 @@ public:
     /** Supplies the global T60 target to this voice's feedback controller. */
     void setT60Target (double T60GlobalSeconds) noexcept;
 
+    /** Sets the in-loop saturation amount in [0, 1]. */
+    void setSaturationAmount (float s) noexcept;
+
+    /** Sets the in-loop diffusion amount in [0, 0.40]. */
+    void setDiffusionAmount (float d) noexcept;
+
     /**
      * Processes an in-place stereo buffer.
      *
@@ -66,6 +74,9 @@ private:
     RepeatToneProcessor repeatTone_;
     PresenceGuard presenceGuard_;
     RepeatTransientSoftener repeatSoftener_;
+    SoftSaturator leftSaturator_;
+    SoftSaturator rightSaturator_;
+    ShortDiffuser shortDiffuser_;
 
     double sampleRate_ { 1.0 };
     float previousLoopOutputLeft_ {};
