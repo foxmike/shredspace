@@ -32,6 +32,9 @@ target_sources(ShredSpace
         Source/DSP/FeedbackController.cpp
         Source/DSP/DelayTimeController.cpp
         Source/DSP/DelayVoice.cpp
+        Source/DSP/RepeatToneProcessor.cpp
+        Source/DSP/PresenceGuard.cpp
+        Source/DSP/RepeatTransientSoftener.cpp
 )
 
 # The DSP translation units include their headers as "DSP/<name>.h", which

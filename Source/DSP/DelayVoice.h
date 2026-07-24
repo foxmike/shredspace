@@ -3,6 +3,9 @@
 #include "DSP/DelayTimeController.h"
 #include "DSP/FeedbackController.h"
 #include "DSP/FractionalDelay.h"
+#include "DSP/RepeatToneProcessor.h"
+#include "DSP/PresenceGuard.h"
+#include "DSP/RepeatTransientSoftener.h"
 
 namespace shredspace
 {
@@ -56,18 +59,13 @@ private:
     void applyTimeTarget (const VoiceResult& timeTarget,
                           double glideMilliseconds) noexcept;
 
-    // Ordered in-loop pass-through hooks. These deliberately do no DSP yet.
-    [[nodiscard]] static float highPass (float sample) noexcept;
-    [[nodiscard]] static float lowPass (float sample) noexcept;
-    [[nodiscard]] static float presenceGuard (float sample) noexcept;
-    [[nodiscard]] static float repeatTransientSoftener (float sample) noexcept;
-    [[nodiscard]] static float mildSaturation (float sample) noexcept;
-    [[nodiscard]] static float restrictedDiffusion (float sample) noexcept;
-    [[nodiscard]] static float feedbackTap (float sample) noexcept;
-
     FractionalDelay leftDelay_;
     FractionalDelay rightDelay_;
     FeedbackController feedbackController_;
+
+    RepeatToneProcessor repeatTone_;
+    PresenceGuard presenceGuard_;
+    RepeatTransientSoftener repeatSoftener_;
 
     double sampleRate_ { 1.0 };
     float previousLoopOutputLeft_ {};

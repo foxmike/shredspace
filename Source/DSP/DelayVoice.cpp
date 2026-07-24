@@ -15,6 +15,12 @@ void DelayVoice::prepare (double sampleRate, int maxBlockSize)
     leftDelay_.prepare (sampleRate_, maxBlockSize);
     rightDelay_.prepare (sampleRate_, maxBlockSize);
     feedbackController_.prepare (sampleRate_);
+
+    // The repeat-loop processors are stereo (left = channel 0, right = 1).
+    repeatTone_.prepare (sampleRate_, maxBlockSize, 2);
+    presenceGuard_.prepare (sampleRate_, maxBlockSize, 2);
+    repeatSoftener_.prepare (sampleRate_, maxBlockSize, 2);
+
     reset();
 }
 
@@ -23,6 +29,9 @@ void DelayVoice::reset() noexcept
     leftDelay_.reset();
     rightDelay_.reset();
     feedbackController_.reset();
+    repeatTone_.reset();
+    presenceGuard_.reset();
+    repeatSoftener_.reset();
     previousLoopOutputLeft_ = 0.0f;
     previousLoopOutputRight_ = 0.0f;
     hasTimeTarget_ = false;
@@ -45,6 +54,13 @@ void DelayVoice::process (float* left,
 
     applyTimeTarget (timeTarget, glideMilliseconds);
 
+    // Control-rate / block boundary: advance smoothers and recompute filter
+    // coefficients for all three repeat-loop processors exactly once per
+    // processed block, never per sample.
+    repeatTone_.updateCoefficients();
+    presenceGuard_.updateCoefficients();
+    repeatSoftener_.updateCoefficients();
+
     for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
     {
         const double delayTimeSeconds =
@@ -65,33 +81,35 @@ void DelayVoice::process (float* left,
         float loopLeft = leftDelay_.processSample (writeLeft);
         float loopRight = rightDelay_.processSample (writeRight);
 
-        // 2. HPF -- ordered pass-through hook for a later phase.
-        loopLeft = highPass (loopLeft);
-        loopRight = highPass (loopRight);
+        // 2. HPF (RepeatToneProcessor).
+        loopLeft = repeatTone_.processHighPassSample (0, loopLeft);
+        loopRight = repeatTone_.processHighPassSample (1, loopRight);
 
-        // 3. LPF -- ordered pass-through hook for a later phase.
-        loopLeft = lowPass (loopLeft);
-        loopRight = lowPass (loopRight);
+        // 3. LPF (RepeatToneProcessor).
+        loopLeft = repeatTone_.processLowPassSample (0, loopLeft);
+        loopRight = repeatTone_.processLowPassSample (1, loopRight);
 
-        // 4. Presence Guard -- ordered pass-through hook for a later phase.
-        loopLeft = presenceGuard (loopLeft);
-        loopRight = presenceGuard (loopRight);
+        // 4. Presence Guard.
+        loopLeft = presenceGuard_.processSample (0, loopLeft);
+        loopRight = presenceGuard_.processSample (1, loopRight);
 
-        // 5. Repeat transient softener -- ordered pass-through hook.
-        loopLeft = repeatTransientSoftener (loopLeft);
-        loopRight = repeatTransientSoftener (loopRight);
+        // 5. Repeat transient softener.
+        loopLeft = repeatSoftener_.processSample (0, loopLeft);
+        loopRight = repeatSoftener_.processSample (1, loopRight);
 
-        // 6. Mild saturation -- ordered pass-through hook for a later phase.
-        loopLeft = mildSaturation (loopLeft);
-        loopRight = mildSaturation (loopRight);
+        // 6. Mild saturation -- RESERVED SLOT for phase e.
+        //    Pass-through placeholder: no implementation yet.
+        // loopLeft = mildSaturation (loopLeft);
+        // loopRight = mildSaturation (loopRight);
 
-        // 7. Restricted diffusion -- ordered pass-through hook.
-        loopLeft = restrictedDiffusion (loopLeft);
-        loopRight = restrictedDiffusion (loopRight);
+        // 7. Restricted diffusion -- RESERVED SLOT for phase e.
+        //    Pass-through placeholder: no implementation yet.
+        // loopLeft = restrictedDiffusion (loopLeft);
+        // loopRight = restrictedDiffusion (loopRight);
 
-        // 8. Feedback tap -- final ordered pass-through hook.
-        previousLoopOutputLeft_ = feedbackTap (loopLeft);
-        previousLoopOutputRight_ = feedbackTap (loopRight);
+        // 8. Feedback tap -- final loop output stored for the next sample.
+        previousLoopOutputLeft_ = loopLeft;
+        previousLoopOutputRight_ = loopRight;
 
         left[sampleIndex] = loopLeft;
         right[sampleIndex] = loopRight;
@@ -124,41 +142,6 @@ void DelayVoice::applyTimeTarget (const VoiceResult& timeTarget,
                                  glideMilliseconds,
                                  mode);
     hasTimeTarget_ = true;
-}
-
-float DelayVoice::highPass (float sample) noexcept
-{
-    return sample;
-}
-
-float DelayVoice::lowPass (float sample) noexcept
-{
-    return sample;
-}
-
-float DelayVoice::presenceGuard (float sample) noexcept
-{
-    return sample;
-}
-
-float DelayVoice::repeatTransientSoftener (float sample) noexcept
-{
-    return sample;
-}
-
-float DelayVoice::mildSaturation (float sample) noexcept
-{
-    return sample;
-}
-
-float DelayVoice::restrictedDiffusion (float sample) noexcept
-{
-    return sample;
-}
-
-float DelayVoice::feedbackTap (float sample) noexcept
-{
-    return sample;
 }
 
 } // namespace shredspace
