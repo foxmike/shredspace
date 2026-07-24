@@ -1,0 +1,1 @@
+{"task_id":"d.2","phase_id":"D","run_id":"d377d7ba-05b3-4168-867b-7ec4fb19d3c5","accepted_at":"2026-07-24T22:49:31.080423","files_added":["Source/DSP/PresenceGuard.cpp","Source/DSP/PresenceGuard.h"],"files_modified":[],"public_symbols_added":[],"public_symbols_removed":[],"dependencies_added":[],"description_summary":"Implement dynamic presence guard with state carried squared"}
