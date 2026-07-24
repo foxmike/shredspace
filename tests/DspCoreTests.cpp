@@ -34,10 +34,12 @@
 #include "../Source/DSP/FractionalDelay.h"
 #include "../Source/DSP/FeedbackController.h"
 #include "../Source/DSP/DelayTimeController.h"
+#include "../Source/DSP/StereoProcessor.h"
 
 // Compile the DSP implementations this translation unit exercises directly.
 #include "../Source/DSP/FractionalDelay.cpp"
 #include "../Source/DSP/FeedbackController.cpp"
+#include "../Source/DSP/StereoProcessor.cpp"
 
 namespace
 {
@@ -61,6 +63,7 @@ public:
         runT60DecayTest();
         runTapMedianTest();
         runBpmFallbackTest();
+        runStereoProcessorTests();
     }
 
 private:
@@ -388,6 +391,185 @@ private:
                 "Retained BPM: " + juce::String (results[0].targetDelaySamples, 2)
                 + " expected " + juce::String (0.6 * 48000.0, 2)
                 + " (200 BPM would give " + juce::String (0.3 * 48000.0, 2) + ")");
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. StereoProcessor tests.
+    //    Verifies constant-power pan, mid/side width, low-frequency mono crossover,
+    //    and correlation telemetry.
+    // -----------------------------------------------------------------------
+    void runStereoProcessorTests()
+    {
+        beginTest ("StereoProcessor - Constant-power pan");
+        {
+            shredspace::StereoProcessor sp;
+            sp.prepare (44100.0, 256);
+            sp.setPan (0.0f);
+            sp.setWidth (1.0f);
+            sp.setLowFrequencyMonoEnabled (false);
+
+            sp.reset();
+
+            // Check center pan (p = 0)
+            float left[1] = { 1.0f };
+            float right[1] = { 1.0f };
+            sp.process (left, right, 1);
+            
+            // At p = 0, gain_L = gain_R = cos(pi/4) = 1/sqrt(2) = 0.70710678
+            expect (std::abs (left[0] - 0.70710678f) <= kFloatTol, "Center pan left mismatch");
+            expect (std::abs (right[0] - 0.70710678f) <= kFloatTol, "Center pan right mismatch");
+
+            // Test power conservation for various pan positions
+            for (float p = -1.0f; p <= 1.0f; p += 0.2f)
+            {
+                sp.setPan (p);
+                // Run enough samples for the 30 ms pan smoother to reach target
+                // 30 ms at 44100 Hz is 1323 samples. Run 2000 samples.
+                float lBuf[2000];
+                float rBuf[2000];
+                std::fill (std::begin (lBuf), std::end (lBuf), 1.0f);
+                std::fill (std::begin (rBuf), std::end (rBuf), 1.0f);
+                sp.process (lBuf, rBuf, 2000);
+
+                const float finalL = lBuf[1999];
+                const float finalR = rBuf[1999];
+                const float power = finalL * finalL + finalR * finalR;
+                
+                expect (std::abs (power - 1.0f) <= kFloatTol, "Power conservation failed at p=" + juce::String (p, 2));
+
+                if (p == -1.0f)
+                {
+                    expect (std::abs (finalL - 1.0f) <= kFloatTol, "Left-pan finalL mismatch");
+                    expect (std::abs (finalR - 0.0f) <= kFloatTol, "Left-pan finalR mismatch");
+                }
+                else if (p == 1.0f)
+                {
+                    expect (std::abs (finalL - 0.0f) <= kFloatTol, "Right-pan finalL mismatch");
+                    expect (std::abs (finalR - 1.0f) <= kFloatTol, "Right-pan finalR mismatch");
+                }
+            }
+        }
+
+        beginTest ("StereoProcessor - Mid/side width");
+        {
+            shredspace::StereoProcessor sp;
+            sp.prepare (44100.0, 256);
+            sp.setPan (0.0f); // Center pan -> gain = 1/sqrt(2)
+            sp.setLowFrequencyMonoEnabled (false);
+
+            // Check identity round-trip at w = 1
+            sp.setWidth (1.0f);
+            sp.reset();
+            
+            float left[1] = { 1.0f };
+            float right[1] = { 0.0f };
+            sp.process (left, right, 1);
+            expect (std::abs (left[0] - 0.70710678f) <= kFloatTol, "Width identity left mismatch");
+            expect (std::abs (right[0] - 0.0f) <= kFloatTol, "Width identity right mismatch");
+
+            // Check mono sum at w = 0 (mono width)
+            sp.setWidth (0.0f);
+            float lBuf[3000];
+            float rBuf[3000];
+            std::fill (std::begin (lBuf), std::end (lBuf), 1.0f);
+            std::fill (std::begin (rBuf), std::end (rBuf), 0.0f);
+            sp.process (lBuf, rBuf, 3000);
+            
+            // At w = 0, M = (1+0)/sqrt(2) = 1/sqrt(2), L_w = 0.5, R_w = 0.5
+            // After pan: L_out = 0.5 * 1/sqrt(2) = 0.35355339
+            expect (std::abs (lBuf[2999] - 0.35355339f) <= kFloatTol, "Width mono left mismatch");
+            expect (std::abs (rBuf[2999] - 0.35355339f) <= kFloatTol, "Width mono right mismatch");
+        }
+
+        beginTest ("StereoProcessor - Low-frequency mono");
+        {
+            const double sampleRate = 44100.0;
+            shredspace::StereoProcessor sp;
+            sp.prepare (sampleRate, 256);
+            sp.setPan (0.0f); // Center pan -> gain = 1/sqrt(2)
+            sp.setWidth (1.0f); // Identity width
+            sp.setLowFrequencyMonoCrossover (180.0f);
+            sp.setLowFrequencyMonoEnabled (true);
+            sp.reset();
+
+            // Run a low frequency sine wave (50 Hz) on Left only
+            float lBuf[4000];
+            float rBuf[4000];
+            for (int n = 0; n < 4000; ++n)
+            {
+                lBuf[n] = std::sin (2.0f * static_cast<float> (juce::MathConstants<double>::pi) * 50.0f * static_cast<float> (n) / static_cast<float> (sampleRate));
+                rBuf[n] = 0.0f;
+            }
+            sp.process (lBuf, rBuf, 4000);
+
+            // Should collapse to mono, Left and Right should be very close
+            for (int n = 3900; n < 4000; ++n)
+            {
+                expect (std::abs (lBuf[n] - rBuf[n]) <= 0.05f, "Low frequency did not collapse to mono");
+            }
+
+            // Run a high frequency sine wave (5000 Hz) on Left only
+            sp.reset();
+            for (int n = 0; n < 4000; ++n)
+            {
+                lBuf[n] = std::sin (2.0f * static_cast<float> (juce::MathConstants<double>::pi) * 5000.0f * static_cast<float> (n) / static_cast<float> (sampleRate));
+                rBuf[n] = 0.0f;
+            }
+            sp.process (lBuf, rBuf, 4000);
+
+            // Right channel should be mostly muted
+            float rMax = 0.0f;
+            for (int n = 3900; n < 4000; ++n)
+            {
+                rMax = std::max (rMax, std::abs (rBuf[n]));
+            }
+            expect (rMax < 0.05f, "High frequency on right channel is too large: " + juce::String (rMax));
+        }
+
+        beginTest ("StereoProcessor - Correlation telemetry");
+        {
+            shredspace::StereoProcessor sp;
+            sp.prepare (44100.0, 256);
+            sp.setPan (0.0f);
+            sp.setWidth (1.0f);
+            sp.setLowFrequencyMonoEnabled (false);
+            sp.reset();
+
+            // Test 1: In-phase (L == R)
+            float lBuf[4000];
+            float rBuf[4000];
+            std::fill (std::begin (lBuf), std::end (lBuf), 1.0f);
+            std::fill (std::begin (rBuf), std::end (rBuf), 1.0f);
+            
+            for (int start = 0; start < 4000; start += 256)
+            {
+                int num = std::min (256, 4000 - start);
+                sp.process (lBuf + start, rBuf + start, num);
+            }
+            expect (std::abs (sp.getCorrelation() - 1.0f) <= kFloatTol, "Correlation L==R mismatch: " + juce::String (sp.getCorrelation()));
+
+            // Test 2: Out-of-phase (L == -R)
+            sp.reset();
+            std::fill (std::begin (lBuf), std::end (lBuf), 1.0f);
+            std::fill (std::begin (rBuf), std::end (rBuf), -1.0f);
+            for (int start = 0; start < 4000; start += 256)
+            {
+                int num = std::min (256, 4000 - start);
+                sp.process (lBuf + start, rBuf + start, num);
+            }
+            expect (std::abs (sp.getCorrelation() - -1.0f) <= kFloatTol, "Correlation L==-R mismatch: " + juce::String (sp.getCorrelation()));
+
+            // Test 3: Orthogonal (L only)
+            sp.reset();
+            std::fill (std::begin (lBuf), std::end (lBuf), 1.0f);
+            std::fill (std::begin (rBuf), std::end (rBuf), 0.0f);
+            for (int start = 0; start < 4000; start += 256)
+            {
+                int num = std::min (256, 4000 - start);
+                sp.process (lBuf + start, rBuf + start, num);
+            }
+            expect (std::abs (sp.getCorrelation() - 0.0f) <= kFloatTol, "Correlation L only mismatch: " + juce::String (sp.getCorrelation()));
+        }
     }
 };
 
