@@ -1,0 +1,1 @@
+{"task_id":"b.3","phase_id":"B","run_id":"9b1a2f8f-938a-449b-986b-badd15a187f2","accepted_at":"2026-07-24T20:40:37.226280","files_added":[],"files_modified":["Source/Parameters/ParameterLayout.cpp"],"public_symbols_added":[],"public_symbols_removed":[],"dependencies_added":[],"description_summary":"Extend parameter layout with voice A and voice B groups"}
