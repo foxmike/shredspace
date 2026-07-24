@@ -4,7 +4,11 @@
 ShredSpaceAudioProcessor::ShredSpaceAudioProcessor()
     : juce::AudioProcessor (BusesProperties()
                             .withInput ("Input", juce::AudioChannelSet::stereo(), true)
-                            .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+                            .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      apvts (*this,
+             nullptr,
+             juce::Identifier (shredspace::paramids::kApvtsType),
+             shredspace::createParameterLayout())
 {
 }
 
@@ -63,7 +67,7 @@ void ShredSpaceAudioProcessor::changeProgramName (int index, const juce::String&
 
 void ShredSpaceAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    parameterSnapshot.prepare (sampleRate, samplesPerBlock, apvts);
 }
 
 void ShredSpaceAudioProcessor::releaseResources()
@@ -95,6 +99,8 @@ bool ShredSpaceAudioProcessor::isBusesLayoutSupported (const BusesLayout& layout
 void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
+    parameterSnapshot.updateFromParameters();
+
     juce::ignoreUnused (midiMessages);
 
     const auto totalNumInputChannels  = getTotalNumInputChannels();
@@ -117,12 +123,43 @@ juce::AudioProcessorEditor* ShredSpaceAudioProcessor::createEditor()
 
 void ShredSpaceAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    juce::ignoreUnused (destData);
+    auto state = apvts.copyState();
+    state.setProperty (shredspace::paramids::kSchemaVersionProperty,
+                       shredspace::paramids::kStateSchemaVersion,
+                       nullptr);
+
+    juce::MemoryOutputStream stream (destData, false);
+    state.writeToStream (stream);
 }
 
 void ShredSpaceAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused (data, sizeInBytes);
+    auto* messageManager = juce::MessageManager::getInstanceWithoutCreating();
+    jassert (messageManager != nullptr && messageManager->isThisTheMessageThread());
+
+    if (messageManager == nullptr
+        || ! messageManager->isThisTheMessageThread()
+        || data == nullptr
+        || sizeInBytes <= 0)
+        return;
+
+    juce::MemoryInputStream stream (data, static_cast<size_t> (sizeInBytes), false);
+    auto state = juce::ValueTree::readFromStream (stream);
+    const juce::Identifier expectedType (shredspace::paramids::kApvtsType);
+    const juce::Identifier schemaProperty (shredspace::paramids::kSchemaVersionProperty);
+
+    if (! state.isValid()
+        || ! state.hasType (expectedType)
+        || ! state.hasProperty (schemaProperty))
+        return;
+
+    const auto schemaVersion = state.getProperty (schemaProperty);
+
+    if (! schemaVersion.isInt()
+        || static_cast<int> (schemaVersion) != shredspace::paramids::kStateSchemaVersion)
+        return;
+
+    apvts.replaceState (state);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

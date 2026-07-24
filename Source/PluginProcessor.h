@@ -2,6 +2,10 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "Parameters/ParameterIDs.h"
+#include "Parameters/ParameterLayout.h"
+#include "Parameters/ParameterSnapshot.h"
+
 class ShredSpaceAudioProcessorEditor;
 
 class ShredSpaceAudioProcessor : public juce::AudioProcessor {
@@ -35,6 +39,11 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }
+
 private:
+    juce::AudioProcessorValueTreeState apvts;
+    shredspace::ParameterSnapshot parameterSnapshot;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShredSpaceAudioProcessor)
 };
