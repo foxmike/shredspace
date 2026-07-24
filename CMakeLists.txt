@@ -52,3 +52,35 @@ target_link_libraries(ShredSpace
 
 enable_testing()
 include(CTest)
+
+# ---------------------------------------------------------------------------
+# Unit test executable. Uses ONLY juce::UnitTest (no third-party frameworks).
+# Built from the test sources plus the parameter and processor sources needed
+# for the state round-trip test. Links the same JUCE module set the plugin uses.
+# ---------------------------------------------------------------------------
+juce_add_console_app(ShredSpaceTests)
+
+target_sources(ShredSpaceTests
+    PRIVATE
+        tests/TestMain.cpp
+        tests/ParameterTests.cpp
+        Source/Parameters/ParameterLayout.cpp
+        Source/Parameters/ParameterSnapshot.cpp
+        Source/PluginProcessor.cpp
+        Source/PluginEditor.cpp
+)
+
+target_compile_definitions(ShredSpaceTests
+    PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0
+)
+
+target_link_libraries(ShredSpaceTests
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+)
+
+add_test(NAME ShredSpaceTests COMMAND ShredSpaceTests)
