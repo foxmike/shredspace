@@ -1,0 +1,48 @@
+# CMake build output
+build/
+build-*/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+compile_commands.json
+
+# Compiled objects and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Generated plugin bundles
+*.vst3/
+*.lv2/
+
+# IDE files
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# Abracapocus runtime output
+.abracapocus/state/
+.abracapocus/reports/
+.abracapocus/logs/
+.abracapocus/cache/
