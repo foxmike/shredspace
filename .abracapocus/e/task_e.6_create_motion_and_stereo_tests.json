@@ -39,6 +39,6 @@
     "e.5"
   ],
   "task_timeout_seconds": 2400,
-  "model": "openrouter/z-ai/glm-5.21",
+  "model": "openrouter/z-ai/glm-5.2",
   "verification_commands": []
 }

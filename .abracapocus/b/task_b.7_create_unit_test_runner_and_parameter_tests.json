@@ -16,7 +16,7 @@
     "No file outside tests/TestMain.cpp, tests/ParameterTests.cpp, and CMakeLists.txt is created or modified"
   ],
   "selected_backend": "pi_cli",
-  "model": "openrouter/z-ai/glm-5.21",
+  "model": "openrouter/z-ai/glm-5.2",
   "verification_profile": "focused",
   "allowed_write_paths": [
     "tests/TestMain.cpp",
