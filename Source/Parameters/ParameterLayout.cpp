@@ -265,9 +265,224 @@ void addSceneParameters (juce::AudioProcessorValueTreeState::ParameterLayout& la
     ));
 }
 
-void addVoiceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& /*layout*/)
+static void addOneVoice (juce::AudioProcessorValueTreeState::ParameterLayout& layout, bool isVoiceB)
 {
-    // Populated by task b.3
+    const char* voicePrefix = isVoiceB ? "Voice B " : "Voice A ";
+
+    const char* enableId = isVoiceB ? shredspace::paramids::VOICE_B_ENABLE : shredspace::paramids::VOICE_A_ENABLE;
+    const char* timeRatioId = isVoiceB ? shredspace::paramids::VOICE_B_TIME_RATIO : shredspace::paramids::VOICE_A_TIME_RATIO;
+    const char* fineOffsetId = isVoiceB ? shredspace::paramids::VOICE_B_FINE_OFFSET : shredspace::paramids::VOICE_A_FINE_OFFSET;
+    const char* levelId = isVoiceB ? shredspace::paramids::VOICE_B_LEVEL : shredspace::paramids::VOICE_A_LEVEL;
+    const char* tailScaleId = isVoiceB ? shredspace::paramids::VOICE_B_TAIL_SCALE : shredspace::paramids::VOICE_A_TAIL_SCALE;
+    const char* adaptiveRoleId = isVoiceB ? shredspace::paramids::VOICE_B_ADAPTIVE_ROLE : shredspace::paramids::VOICE_A_ADAPTIVE_ROLE;
+    const char* panId = isVoiceB ? shredspace::paramids::VOICE_B_PAN : shredspace::paramids::VOICE_A_PAN;
+    const char* widthId = isVoiceB ? shredspace::paramids::VOICE_B_WIDTH : shredspace::paramids::VOICE_A_WIDTH;
+    const char* stereoOffsetId = isVoiceB ? shredspace::paramids::VOICE_B_STEREO_OFFSET : shredspace::paramids::VOICE_A_STEREO_OFFSET;
+    const char* crossFeedbackId = isVoiceB ? shredspace::paramids::VOICE_B_CROSS_FEEDBACK : shredspace::paramids::VOICE_A_CROSS_FEEDBACK;
+    const char* modPhaseId = isVoiceB ? shredspace::paramids::VOICE_B_MOD_PHASE : shredspace::paramids::VOICE_A_MOD_PHASE;
+    const char* hpfId = isVoiceB ? shredspace::paramids::VOICE_B_HPF : shredspace::paramids::VOICE_A_HPF;
+    const char* lpfId = isVoiceB ? shredspace::paramids::VOICE_B_LPF : shredspace::paramids::VOICE_A_LPF;
+    const char* presenceFreqId = isVoiceB ? shredspace::paramids::VOICE_B_PRESENCE_FREQ : shredspace::paramids::VOICE_A_PRESENCE_FREQ;
+    const char* presenceGuardId = isVoiceB ? shredspace::paramids::VOICE_B_PRESENCE_GUARD : shredspace::paramids::VOICE_A_PRESENCE_GUARD;
+    const char* attackSoftenId = isVoiceB ? shredspace::paramids::VOICE_B_ATTACK_SOFTEN : shredspace::paramids::VOICE_A_ATTACK_SOFTEN;
+    const char* modRateId = isVoiceB ? shredspace::paramids::VOICE_B_MOD_RATE : shredspace::paramids::VOICE_A_MOD_RATE;
+    const char* modDepthId = isVoiceB ? shredspace::paramids::VOICE_B_MOD_DEPTH : shredspace::paramids::VOICE_A_MOD_DEPTH;
+    const char* driftId = isVoiceB ? shredspace::paramids::VOICE_B_DRIFT : shredspace::paramids::VOICE_A_DRIFT;
+    const char* diffusionId = isVoiceB ? shredspace::paramids::VOICE_B_DIFFUSION : shredspace::paramids::VOICE_A_DIFFUSION;
+    const char* saturationId = isVoiceB ? shredspace::paramids::VOICE_B_SATURATION : shredspace::paramids::VOICE_A_SATURATION;
+
+    layout.add (std::make_unique<juce::AudioParameterBool> (
+        juce::ParameterID { enableId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Enable",
+        true
+    ));
+
+    {
+        juce::NormalisableRange<float> range (0.25f, 4.0f);
+        range.setSkewForCentre (1.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { timeRatioId, shredspace::paramids::kStateSchemaVersion },
+            juce::String (voicePrefix) + "Time Ratio",
+            range,
+            isVoiceB ? 1.0f : 0.5f
+        ));
+    }
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { fineOffsetId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Fine Offset",
+        juce::NormalisableRange<float> (-50.0f, 50.0f),
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { levelId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Level",
+        juce::NormalisableRange<float> (-60.0f, 0.0f),
+        isVoiceB ? -10.0f : -12.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" dB")
+    ));
+
+    {
+        juce::NormalisableRange<float> range (0.25f, 4.0f);
+        range.setSkewForCentre (1.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { tailScaleId, shredspace::paramids::kStateSchemaVersion },
+            juce::String (voicePrefix) + "Tail Scale",
+            range,
+            isVoiceB ? 1.2f : 0.65f
+        ));
+    }
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { adaptiveRoleId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Adaptive Role",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        isVoiceB ? 85.0f : 40.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { panId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Pan",
+        juce::NormalisableRange<float> (-100.0f, 100.0f),
+        isVoiceB ? 20.0f : -20.0f
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { widthId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Width",
+        juce::NormalisableRange<float> (0.0f, 200.0f),
+        isVoiceB ? 130.0f : 60.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { stereoOffsetId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Stereo Offset",
+        juce::NormalisableRange<float> (0.0f, 30.0f),
+        isVoiceB ? 11.0f : 3.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { crossFeedbackId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Cross Feedback",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        isVoiceB ? 35.0f : 15.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { modPhaseId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Mod Phase",
+        juce::NormalisableRange<float> (0.0f, 180.0f),
+        isVoiceB ? 180.0f : 90.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" deg")
+    ));
+
+    {
+        juce::NormalisableRange<float> range (40.0f, 1500.0f);
+        range.setSkewForCentre (250.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { hpfId, shredspace::paramids::kStateSchemaVersion },
+            juce::String (voicePrefix) + "HPF",
+            range,
+            isVoiceB ? 220.0f : 180.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" Hz")
+        ));
+    }
+
+    {
+        juce::NormalisableRange<float> range (2000.0f, 20000.0f);
+        range.setSkewForCentre (6000.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { lpfId, shredspace::paramids::kStateSchemaVersion },
+            juce::String (voicePrefix) + "LPF",
+            range,
+            isVoiceB ? 5500.0f : 6500.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" Hz")
+        ));
+    }
+
+    {
+        juce::NormalisableRange<float> range (1500.0f, 6000.0f);
+        range.setSkewForCentre (3000.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { presenceFreqId, shredspace::paramids::kStateSchemaVersion },
+            juce::String (voicePrefix) + "Presence Freq",
+            range,
+            3200.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" Hz")
+        ));
+    }
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { presenceGuardId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Presence Guard",
+        juce::NormalisableRange<float> (0.0f, 12.0f),
+        isVoiceB ? 5.0f : 4.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" dB")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { attackSoftenId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Attack Soften",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        isVoiceB ? 40.0f : 30.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    {
+        juce::NormalisableRange<float> range (0.05f, 5.0f);
+        range.setSkewForCentre (0.5f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { modRateId, shredspace::paramids::kStateSchemaVersion },
+            juce::String (voicePrefix) + "Mod Rate",
+            range,
+            isVoiceB ? 0.23f : 0.35f,
+            juce::AudioParameterFloatAttributes().withLabel (" Hz")
+        ));
+    }
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { modDepthId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Mod Depth",
+        juce::NormalisableRange<float> (0.0f, 8.0f),
+        isVoiceB ? 0.7f : 0.4f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { driftId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Drift",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        isVoiceB ? 15.0f : 10.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { diffusionId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Diffusion",
+        juce::NormalisableRange<float> (0.0f, 40.0f),
+        isVoiceB ? 12.0f : 8.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { saturationId, shredspace::paramids::kStateSchemaVersion },
+        juce::String (voicePrefix) + "Saturation",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        isVoiceB ? 10.0f : 8.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+}
+
+void addVoiceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
+{
+    addOneVoice (layout, false);
+    addOneVoice (layout, true);
 }
 
 void addIntelligenceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& /*layout*/)
