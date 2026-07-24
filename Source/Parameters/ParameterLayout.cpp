@@ -485,9 +485,231 @@ void addVoiceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& la
     addOneVoice (layout, true);
 }
 
-void addIntelligenceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& /*layout*/)
+void addIntelligenceParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
 {
-    // Populated by task b.4
+    // =====================================================================
+    // Detector
+    // =====================================================================
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_SENSITIVITY, shredspace::paramids::kStateSchemaVersion },
+        "Sensitivity",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        55.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_INPUT_GATE, shredspace::paramids::kStateSchemaVersion },
+        "Input Gate",
+        juce::NormalisableRange<float> (-80.0f, -20.0f),
+        -55.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" dB")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_DENSITY_WINDOW, shredspace::paramids::kStateSchemaVersion },
+        "Density Window",
+        juce::NormalisableRange<float> (200.0f, 1000.0f),
+        500.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_DENSITY_START, shredspace::paramids::kStateSchemaVersion },
+        "Density Start",
+        juce::NormalisableRange<float> (1.0f, 8.0f),
+        3.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ev/s")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_DENSITY_FULL, shredspace::paramids::kStateSchemaVersion },
+        "Density Full",
+        juce::NormalisableRange<float> (6.0f, 20.0f),
+        12.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ev/s")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_SUSTAIN_START, shredspace::paramids::kStateSchemaVersion },
+        "Sustain Start",
+        juce::NormalisableRange<float> (50.0f, 800.0f),
+        180.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_SUSTAIN_FULL, shredspace::paramids::kStateSchemaVersion },
+        "Sustain Full",
+        juce::NormalisableRange<float> (150.0f, 2000.0f),
+        650.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_PHRASE_GAP, shredspace::paramids::kStateSchemaVersion },
+        "Phrase Gap",
+        juce::NormalisableRange<float> (20.0f, 500.0f),
+        120.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    // =====================================================================
+    // Contraction
+    // =====================================================================
+    {
+        juce::NormalisableRange<float> range (1.0f, 100.0f);
+        range.setSkewForCentre (15.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { shredspace::paramids::INTEL_CONTRACTION_ATTACK, shredspace::paramids::kStateSchemaVersion },
+            "Contraction Attack",
+            range,
+            8.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" ms")
+        ));
+    }
+
+    {
+        juce::NormalisableRange<float> range (20.0f, 1000.0f);
+        range.setSkewForCentre (250.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { shredspace::paramids::INTEL_CONTRACTION_RELEASE, shredspace::paramids::kStateSchemaVersion },
+            "Contraction Release",
+            range,
+            220.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" ms")
+        ));
+    }
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_WET_REDUCTION, shredspace::paramids::kStateSchemaVersion },
+        "Wet Reduction",
+        juce::NormalisableRange<float> (0.0f, 18.0f),
+        8.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" dB")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_TAIL_REDUCTION, shredspace::paramids::kStateSchemaVersion },
+        "Tail Reduction",
+        juce::NormalisableRange<float> (0.0f, 2.0f),
+        1.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" oct")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_TONE_DARKENING, shredspace::paramids::kStateSchemaVersion },
+        "Tone Darkening",
+        juce::NormalisableRange<float> (0.0f, 2.0f),
+        0.75f,
+        juce::AudioParameterFloatAttributes().withLabel (" oct")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_WIDTH_REDUCTION, shredspace::paramids::kStateSchemaVersion },
+        "Width Reduction",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        35.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_ATTACK_SOFTEN_INCREASE, shredspace::paramids::kStateSchemaVersion },
+        "Attack Soften Increase",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        45.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    // =====================================================================
+    // Bloom
+    // =====================================================================
+    {
+        juce::NormalisableRange<float> range (20.0f, 1500.0f);
+        range.setSkewForCentre (300.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { shredspace::paramids::INTEL_BLOOM_RISE, shredspace::paramids::kStateSchemaVersion },
+            "Bloom Rise",
+            range,
+            220.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" ms")
+        ));
+    }
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_BLOOM_HOLD, shredspace::paramids::kStateSchemaVersion },
+        "Bloom Hold",
+        juce::NormalisableRange<float> (0.0f, 2000.0f),
+        350.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" ms")
+    ));
+
+    {
+        juce::NormalisableRange<float> range (50.0f, 3000.0f);
+        range.setSkewForCentre (700.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { shredspace::paramids::INTEL_BLOOM_RELEASE, shredspace::paramids::kStateSchemaVersion },
+            "Bloom Release",
+            range,
+            800.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" ms")
+        ));
+    }
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_WET_LIFT, shredspace::paramids::kStateSchemaVersion },
+        "Wet Lift",
+        juce::NormalisableRange<float> (0.0f, 12.0f),
+        4.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" dB")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_TAIL_EXPANSION, shredspace::paramids::kStateSchemaVersion },
+        "Tail Expansion",
+        juce::NormalisableRange<float> (0.0f, 2.0f),
+        0.75f,
+        juce::AudioParameterFloatAttributes().withLabel (" oct")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_TONE_OPENING, shredspace::paramids::kStateSchemaVersion },
+        "Tone Opening",
+        juce::NormalisableRange<float> (0.0f, 1.0f),
+        0.35f,
+        juce::AudioParameterFloatAttributes().withLabel (" oct")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_WIDTH_EXPANSION, shredspace::paramids::kStateSchemaVersion },
+        "Width Expansion",
+        juce::NormalisableRange<float> (0.0f, 100.0f),
+        30.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { shredspace::paramids::INTEL_DIFFUSION_INCREASE, shredspace::paramids::kStateSchemaVersion },
+        "Diffusion Increase",
+        juce::NormalisableRange<float> (0.0f, 30.0f),
+        12.0f,
+        juce::AudioParameterFloatAttributes().withLabel (" %")
+    ));
+
+    // =====================================================================
+    // Shared
+    // =====================================================================
+    {
+        juce::NormalisableRange<float> range (1000.0f, 6000.0f);
+        range.setSkewForCentre (2500.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { shredspace::paramids::INTEL_TRANSIENT_CROSSOVER, shredspace::paramids::kStateSchemaVersion },
+            "Transient Crossover",
+            range,
+            2500.0f,
+            juce::AudioParameterFloatAttributes().withLabel (" Hz")
+        ));
+    }
 }
 
 } // namespace shredspace
