@@ -447,3 +447,266 @@ private:
 static ShredSpaceParameterTests sShredSpaceParameterTestsInstance;
 
 } // namespace
+
+#include "../Source/DSP/DelayTimeController.cpp"
+
+namespace
+{
+
+class ShredSpaceDelayTimeControllerTests final : public juce::UnitTest
+{
+public:
+    ShredSpaceDelayTimeControllerTests()
+        : juce::UnitTest ("DelayTimeController", "ShredSpace DSP")
+    {}
+
+    void runTest() override
+    {
+        runHostTimingPodTest();
+        runMillisecondsModeTest();
+        runHostSyncModeTest();
+        runTapTempoTest();
+        runTransitionRequestsTest();
+    }
+
+private:
+    void runHostTimingPodTest()
+    {
+        beginTest ("HostTiming POD Layout");
+
+        // Verify verbatim fields exist and compile as expected
+        shredspace::HostTiming timing {};
+        timing.bpm = 120.0;
+        timing.bpmValid = true;
+        timing.isPlaying = false;
+        timing.samplePosition = 12345;
+
+        expect (std::abs (timing.bpm - 120.0) <= 1e-5);
+        expect (timing.bpmValid);
+        expect (! timing.isPlaying);
+        expect (timing.samplePosition == 12345);
+    }
+
+    void runMillisecondsModeTest()
+    {
+        beginTest ("Milliseconds Mode and Clamping");
+
+        shredspace::DelayTimeController controller;
+        controller.prepare (44100.0);
+
+        shredspace::ControllerInput input {};
+        input.timeMode = 0; // Milliseconds
+        input.macroTimeMs = 500.0;
+        input.voiceA.timeRatio = 1.0;
+        input.voiceA.fineOffsetMs = 0.0;
+        input.voiceB.timeRatio = 0.5;
+        input.voiceB.fineOffsetMs = 10.0;
+
+        shredspace::HostTiming timing { 120.0, true, false, 0 };
+
+        // Check resolved values
+        auto results = controller.update (input, timing);
+
+        // Voice A: T_voice = 0.5 * 1.0 + 0.0 = 0.5s -> 22050 samples
+        expect (std::abs (results[0].targetDelaySamples - 22050.0) <= 1e-2);
+
+        // Voice B: T_voice = 0.5 * 0.5 + 0.010 = 0.26s -> 11466 samples
+        expect (std::abs (results[1].targetDelaySamples - 11466.0) <= 1e-2);
+
+        // Check clamping at minimum (8.0 samples)
+        input.macroTimeMs = 0.0;
+        input.voiceA.timeRatio = 0.0;
+        input.voiceA.fineOffsetMs = -100.0; // will result in negative delay before clamp
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 8.0) <= 1e-5);
+
+        // Check clamping at maximum (8.25 seconds)
+        input.macroTimeMs = 9000.0; // 9 seconds
+        input.voiceA.timeRatio = 1.5;
+        input.voiceA.fineOffsetMs = 1000.0;
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 8.25 * 44100.0) <= 1e-2);
+    }
+
+    void runHostSyncModeTest()
+    {
+        beginTest ("HostSync Mode and BPM Fallback");
+
+        shredspace::DelayTimeController controller;
+        controller.prepare (48000.0);
+
+        shredspace::ControllerInput input {};
+        input.timeMode = 1; // Host Sync
+        input.syncDivision = 6; // "1/4" (1.0 quarter note ratio)
+        input.voiceA.timeRatio = 1.0;
+        input.voiceA.fineOffsetMs = 0.0;
+        input.voiceB.timeRatio = 2.0;
+        input.voiceB.fineOffsetMs = 0.0;
+
+        // 1. Initial invalid BPM -> falls back to 120 BPM
+        shredspace::HostTiming timing { 0.0, false, false, 0 };
+        auto results = controller.update (input, timing);
+        // T_quarter at 120 BPM = 0.5s. Sync division ratio for 1/4 = 1.0.
+        // Voice A: T_voice = 0.5 * 1.0 * 1.0 = 0.5s -> 24000 samples
+        expect (std::abs (results[0].targetDelaySamples - 24000.0) <= 1e-2);
+        // Voice B: T_voice = 0.5 * 1.0 * 2.0 = 1.0s -> 48000 samples
+        expect (std::abs (results[1].targetDelaySamples - 48000.0) <= 1e-2);
+
+        // 2. Valid BPM updates
+        timing.bpm = 100.0; // T_quarter = 0.6s
+        timing.bpmValid = true;
+        results = controller.update (input, timing);
+        // Voice A: 0.6s * 48000 = 28800 samples
+        expect (std::abs (results[0].targetDelaySamples - 28800.0) <= 1e-2);
+
+        // 3. Invalid BPM -> retains last valid BPM (100.0)
+        timing.bpm = 150.0;
+        timing.bpmValid = false;
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 28800.0) <= 1e-2);
+    }
+
+    void runTapTempoTest()
+    {
+        beginTest ("Tap Tempo and Median");
+
+        shredspace::DelayTimeController controller;
+        controller.prepare (44100.0);
+
+        shredspace::ControllerInput input {};
+        input.timeMode = 2; // Tap
+        input.voiceA.timeRatio = 1.0;
+        input.voiceA.fineOffsetMs = 0.0;
+
+        shredspace::HostTiming timing { 120.0, true, false, 0 };
+
+        // 1. Empty tap history -> fallback to 120 BPM (500 ms interval)
+        auto results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 0.5 * 44100.0) <= 1e-2);
+
+        // 2. Record taps
+        // Tap 1 at 0.0s
+        controller.tap (0.0);
+        // Tap 2 at 0.4s (interval 400ms)
+        controller.tap (0.4);
+        results = controller.update (input, timing);
+        // Median of [0.4] is 0.4s
+        expect (std::abs (results[0].targetDelaySamples - 0.4 * 44100.0) <= 1e-2);
+
+        // Tap 3 at 0.9s (interval 500ms) -> history: [0.4, 0.5]
+        controller.tap (0.9);
+        // Median of [0.4, 0.5] is 0.45s
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 0.45 * 44100.0) <= 1e-2);
+
+        // Tap 4 at 2.9s (interval 2.0s) -> history: [0.4, 0.5, 2.0]
+        controller.tap (2.9);
+        // Median of [0.4, 0.5, 2.0] is 0.5s
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 0.5 * 44100.0) <= 1e-2);
+
+        // Tap 5 at 3.2s (interval 300ms) -> history: [0.4, 0.5, 2.0, 0.3]
+        controller.tap (3.2);
+        // Sorted: [0.3, 0.4, 0.5, 2.0]. Median is (0.4 + 0.5) / 2 = 0.45s
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 0.45 * 44100.0) <= 1e-2);
+
+        // Tap 6 at 4.0s (interval 800ms) -> history: [0.4, 0.5, 2.0, 0.3, 0.8]
+        controller.tap (4.0);
+        // Sorted: [0.3, 0.4, 0.5, 0.8, 2.0]. Median is 0.5s
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 0.5 * 44100.0) <= 1e-2);
+
+        // Tap 7 at 4.6s (interval 600ms) -> history: oldest (0.4) shifted out.
+        // History: [0.5, 2.0, 0.3, 0.8, 0.6]
+        // Sorted: [0.3, 0.5, 0.6, 0.8, 2.0]. Median is 0.6s
+        controller.tap (4.6);
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 0.6 * 44100.0) <= 1e-2);
+
+        // 3. Rejected tap
+        // Tap 8 at 10.0s (interval 5.4s) -> rejected! history remains same.
+        controller.tap (10.0);
+        results = controller.update (input, timing);
+        expect (std::abs (results[0].targetDelaySamples - 0.6 * 44100.0) <= 1e-2);
+    }
+
+    void runTransitionRequestsTest()
+    {
+        beginTest ("Transition Requests and Large Changes");
+
+        shredspace::DelayTimeController controller;
+        controller.prepare (44100.0);
+
+        shredspace::ControllerInput input {};
+        input.timeMode = 0;
+        input.macroTimeMs = 500.0;
+        input.voiceA.timeRatio = 1.0;
+        input.voiceA.fineOffsetMs = 0.0;
+        input.voiceB.timeRatio = 1.0;
+        input.voiceB.fineOffsetMs = 0.0;
+
+        shredspace::HostTiming timing { 120.0, true, false, 0 };
+
+        // First update must NOT require transitions
+        auto results = controller.update (input, timing);
+        expect (! results[0].transitionRequired);
+        expect (! results[1].transitionRequired);
+
+        // Small change: macroTimeMs 500ms -> 502ms (2ms change -> 0.002s)
+        // This is below the 10 ms threshold for large changes, so transitionRequired = true, mode = bend
+        input.macroTimeMs = 502.0;
+        results = controller.update (input, timing);
+        expect (results[0].transitionRequired);
+        expect (results[0].transitionMode == shredspace::TransitionMode::bend);
+
+        // Let's run update again with no changes: transitionRequired should be false
+        results = controller.update (input, timing);
+        expect (! results[0].transitionRequired);
+
+        // Large change: macroTimeMs 502ms -> 600ms (98ms change) -> mode = smooth
+        input.macroTimeMs = 600.0;
+        results = controller.update (input, timing);
+        expect (results[0].transitionRequired);
+        expect (results[0].transitionMode == shredspace::TransitionMode::smooth);
+
+        // Host BPM jump (when timing.bpmValid is true) -> triggers large transition request
+        // First establish current target in Host Sync mode
+        input.timeMode = 1; // triggers mode change -> large change
+        results = controller.update (input, timing);
+        expect (results[0].transitionRequired);
+        expect (results[0].transitionMode == shredspace::TransitionMode::smooth);
+
+        // Let target settle
+        results = controller.update (input, timing);
+        expect (! results[0].transitionRequired);
+
+        // BPM jump
+        timing.bpm = 125.0;
+        results = controller.update (input, timing);
+        expect (results[0].transitionRequired);
+        expect (results[0].transitionMode == shredspace::TransitionMode::smooth);
+
+        // Settle
+        results = controller.update (input, timing);
+
+        // Scene change
+        input.sceneIndex = 1;
+        results = controller.update (input, timing);
+        expect (results[0].transitionRequired);
+        expect (results[0].transitionMode == shredspace::TransitionMode::smooth);
+
+        // Settle
+        results = controller.update (input, timing);
+
+        // Profile change
+        input.profileIndex = 1;
+        results = controller.update (input, timing);
+        expect (results[0].transitionRequired);
+        expect (results[0].transitionMode == shredspace::TransitionMode::smooth);
+    }
+};
+
+static ShredSpaceDelayTimeControllerTests sShredSpaceDelayTimeControllerTestsInstance;
+
+} // namespace
