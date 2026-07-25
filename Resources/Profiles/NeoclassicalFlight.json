@@ -1,0 +1,304 @@
+{
+  "schema_version": 1,
+  "product_version": "1.0.0",
+  "profile_name": "NeoclassicalFlight",
+  "author": "nSpace Systems",
+  "description": "Long, wide tail with articulate bloom and open top end.",
+  "base_parameter_values": {
+    "GLOBAL_INPUT_GAIN": 0.0,
+    "GLOBAL_OUTPUT_GAIN": 0.0,
+    "GLOBAL_MIX": 30,
+    "GLOBAL_MIX_MODE": 0,
+    "GLOBAL_BYPASS_MODE": 1,
+    "GLOBAL_SPILLOVER": 1,
+    "GLOBAL_SAFETY_LIMITER": 1,
+    "PERF_MACRO_TIME": 520,
+    "PERF_MACRO_SPACE": 55,
+    "PERF_MACRO_DEFINITION": 60,
+    "PERF_MACRO_BLOOM": 55,
+    "PERF_MACRO_TAIL": 4.2,
+    "PERF_MACRO_FOCUS": 50,
+    "PERF_MACRO_WIDTH": 80,
+    "PERF_MACRO_CHARACTER": 35,
+    "PERF_ADAPTIVE_MODE": 1,
+    "PERF_ROUTING": 0,
+    "PERF_ROUTING_CASCADE": 40.0,
+    "TIME_MODE": 0,
+    "TIME_SYNC_DIVISION": 8,
+    "TIME_GLIDE": 160.0,
+    "STEREO_LF_MONO": 1,
+    "STEREO_LF_MONO_FREQ": 160.0,
+    "VOICE_A_ENABLE": 1,
+    "VOICE_A_TIME_RATIO": 0.5,
+    "VOICE_A_FINE_OFFSET": 0.0,
+    "VOICE_A_LEVEL": -12.0,
+    "VOICE_A_TAIL_SCALE": 0.9,
+    "VOICE_A_ADAPTIVE_ROLE": 40.0,
+    "VOICE_A_PAN": -20.0,
+    "VOICE_A_WIDTH": 80.0,
+    "VOICE_A_STEREO_OFFSET": 6.0,
+    "VOICE_A_CROSS_FEEDBACK": 15.0,
+    "VOICE_A_MOD_PHASE": 90.0,
+    "VOICE_A_HPF": 220.0,
+    "VOICE_A_LPF": 11000.0,
+    "VOICE_A_PRESENCE_FREQ": 3200.0,
+    "VOICE_A_PRESENCE_GUARD": 4.0,
+    "VOICE_A_ATTACK_SOFTEN": 30.0,
+    "VOICE_A_MOD_RATE": 0.35,
+    "VOICE_A_MOD_DEPTH": 0.4,
+    "VOICE_A_DRIFT": 10.0,
+    "VOICE_A_DIFFUSION": 14.0,
+    "VOICE_A_SATURATION": 8.0,
+    "VOICE_B_ENABLE": 1,
+    "VOICE_B_TIME_RATIO": 1.0,
+    "VOICE_B_FINE_OFFSET": 0.0,
+    "VOICE_B_LEVEL": -10.0,
+    "VOICE_B_TAIL_SCALE": 1.6,
+    "VOICE_B_ADAPTIVE_ROLE": 85.0,
+    "VOICE_B_PAN": 20.0,
+    "VOICE_B_WIDTH": 160.0,
+    "VOICE_B_STEREO_OFFSET": 14.0,
+    "VOICE_B_CROSS_FEEDBACK": 35.0,
+    "VOICE_B_MOD_PHASE": 180.0,
+    "VOICE_B_HPF": 220.0,
+    "VOICE_B_LPF": 10000.0,
+    "VOICE_B_PRESENCE_FREQ": 3200.0,
+    "VOICE_B_PRESENCE_GUARD": 5.0,
+    "VOICE_B_ATTACK_SOFTEN": 40.0,
+    "VOICE_B_MOD_RATE": 0.23,
+    "VOICE_B_MOD_DEPTH": 0.7,
+    "VOICE_B_DRIFT": 15.0,
+    "VOICE_B_DIFFUSION": 20.0,
+    "VOICE_B_SATURATION": 10.0,
+    "INTEL_SENSITIVITY": 55.0,
+    "INTEL_INPUT_GATE": -55.0,
+    "INTEL_DENSITY_WINDOW": 500.0,
+    "INTEL_DENSITY_START": 3.0,
+    "INTEL_DENSITY_FULL": 12.0,
+    "INTEL_SUSTAIN_START": 180.0,
+    "INTEL_SUSTAIN_FULL": 650.0,
+    "INTEL_PHRASE_GAP": 120.0,
+    "INTEL_CONTRACTION_ATTACK": 8.0,
+    "INTEL_CONTRACTION_RELEASE": 220.0,
+    "INTEL_WET_REDUCTION": 8.0,
+    "INTEL_TAIL_REDUCTION": 1.0,
+    "INTEL_TONE_DARKENING": 0.75,
+    "INTEL_WIDTH_REDUCTION": 35.0,
+    "INTEL_ATTACK_SOFTEN_INCREASE": 45.0,
+    "INTEL_BLOOM_RISE": 220.0,
+    "INTEL_BLOOM_HOLD": 350.0,
+    "INTEL_BLOOM_RELEASE": 1100.0,
+    "INTEL_WET_LIFT": 4.0,
+    "INTEL_TAIL_EXPANSION": 1.2,
+    "INTEL_TONE_OPENING": 0.35,
+    "INTEL_WIDTH_EXPANSION": 45.0,
+    "INTEL_DIFFUSION_INCREASE": 12.0,
+    "INTEL_TRANSIENT_CROSSOVER": 2500.0
+  },
+  "macro_mapping": {
+    "TIME": [
+      {
+        "destination_parameter_id": "VOICE_A_TIME_RATIO",
+        "delta_min": 0.0,
+        "delta_max": 1.5,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "VOICE_B_TIME_RATIO",
+        "delta_min": 0.0,
+        "delta_max": 1.5,
+        "curve": 1.0
+      }
+    ],
+    "SPACE": [
+      {
+        "destination_parameter_id": "VOICE_A_DIFFUSION",
+        "delta_min": 0.0,
+        "delta_max": 20.0,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "VOICE_B_DIFFUSION",
+        "delta_min": 0.0,
+        "delta_max": 20.0,
+        "curve": 1.0
+      }
+    ],
+    "DEFINITION": [
+      {
+        "destination_parameter_id": "VOICE_A_HPF",
+        "delta_min": 0.0,
+        "delta_max": 200.0,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "VOICE_B_HPF",
+        "delta_min": 0.0,
+        "delta_max": 200.0,
+        "curve": 1.0
+      }
+    ],
+    "BLOOM": [
+      {
+        "destination_parameter_id": "INTEL_BLOOM_RISE",
+        "delta_min": -200.0,
+        "delta_max": 200.0,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "INTEL_WET_LIFT",
+        "delta_min": 0.0,
+        "delta_max": 6.0,
+        "curve": 1.0
+      }
+    ],
+    "TAIL": [
+      {
+        "destination_parameter_id": "VOICE_A_TAIL_SCALE",
+        "delta_min": 0.0,
+        "delta_max": 1.5,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "VOICE_B_TAIL_SCALE",
+        "delta_min": 0.0,
+        "delta_max": 1.5,
+        "curve": 1.0
+      }
+    ],
+    "FOCUS": [
+      {
+        "destination_parameter_id": "VOICE_A_PRESENCE_GUARD",
+        "delta_min": 0.0,
+        "delta_max": 6.0,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "VOICE_B_PRESENCE_GUARD",
+        "delta_min": 0.0,
+        "delta_max": 6.0,
+        "curve": 1.0
+      }
+    ],
+    "WIDTH": [
+      {
+        "destination_parameter_id": "VOICE_A_WIDTH",
+        "delta_min": 0.0,
+        "delta_max": 60.0,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "VOICE_B_WIDTH",
+        "delta_min": 0.0,
+        "delta_max": 60.0,
+        "curve": 1.0
+      }
+    ],
+    "CHARACTER": [
+      {
+        "destination_parameter_id": "VOICE_A_SATURATION",
+        "delta_min": 0.0,
+        "delta_max": 30.0,
+        "curve": 1.0
+      },
+      {
+        "destination_parameter_id": "VOICE_B_SATURATION",
+        "delta_min": 0.0,
+        "delta_max": 30.0,
+        "curve": 1.0
+      }
+    ]
+  },
+  "scene_values": {
+    "A": {
+      "macro_targets": {
+        "TIME": 520.0,
+        "SPACE": 55.0,
+        "DEFINITION": 60.0,
+        "BLOOM": 55.0,
+        "TAIL": 4.2,
+        "FOCUS": 50.0,
+        "WIDTH": 80.0,
+        "CHARACTER": 35.0
+      },
+      "mix_target": {
+        "parameter_id": "GLOBAL_MIX",
+        "value": 30
+      },
+      "routing_target": {
+        "parameter_id": "PERF_ROUTING",
+        "value": 0.0
+      },
+      "hold_behavior": "Momentary"
+    },
+    "B": {
+      "macro_targets": {
+        "TIME": 520.0,
+        "SPACE": 70,
+        "DEFINITION": 60.0,
+        "BLOOM": 65,
+        "TAIL": 5.0,
+        "FOCUS": 50.0,
+        "WIDTH": 90,
+        "CHARACTER": 35.0
+      },
+      "mix_target": {
+        "parameter_id": "GLOBAL_MIX",
+        "value": 55
+      },
+      "routing_target": {
+        "parameter_id": "PERF_ROUTING",
+        "value": 1.0
+      },
+      "hold_behavior": "Latch"
+    },
+    "C": {
+      "macro_targets": {
+        "TIME": 480,
+        "SPACE": 55.0,
+        "DEFINITION": 75,
+        "BLOOM": 55.0,
+        "TAIL": 4.2,
+        "FOCUS": 65,
+        "WIDTH": 80.0,
+        "CHARACTER": 35.0
+      },
+      "mix_target": {
+        "parameter_id": "GLOBAL_MIX",
+        "value": 42
+      },
+      "routing_target": {
+        "parameter_id": "PERF_ROUTING",
+        "value": 2.0
+      },
+      "hold_behavior": "Momentary"
+    },
+    "D": {
+      "macro_targets": {
+        "TIME": 520.0,
+        "SPACE": 75,
+        "DEFINITION": 60.0,
+        "BLOOM": 75,
+        "TAIL": 5.7,
+        "FOCUS": 50.0,
+        "WIDTH": 100.0,
+        "CHARACTER": 35.0
+      },
+      "mix_target": {
+        "parameter_id": "GLOBAL_MIX",
+        "value": 68
+      },
+      "routing_target": {
+        "parameter_id": "PERF_ROUTING",
+        "value": 0.0
+      },
+      "hold_behavior": "Latch"
+    }
+  },
+  "tags": [
+    "long tail",
+    "wide",
+    "articulate",
+    "open"
+  ]
+}

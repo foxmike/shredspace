@@ -47,6 +47,29 @@ target_sources(ShredSpace
         Source/Analysis/DensityEstimator.cpp
         Source/Analysis/SustainEstimator.cpp
         Source/Analysis/AdaptiveController.cpp
+        Source/Profiles/ProfileSchema.cpp
+        Source/Profiles/ProfileManager.cpp
+        Source/Profiles/ProfileSnapshot.cpp
+        Source/Profiles/SceneManager.cpp
+        Source/Parameters/MacroEngine.cpp
+)
+
+# Bundled profile resources: the twelve engineering starting-value JSON
+# profiles under Resources/Profiles are embedded into the plugin binary.
+juce_add_binary_data(ShredSpaceProfiles
+    SOURCES
+        Resources/Profiles/PrecisionRack.json
+        Resources/Profiles/RapidDefinition.json
+        Resources/Profiles/NeoclassicalFlight.json
+        Resources/Profiles/WideArpeggio.json
+        Resources/Profiles/SingingLead.json
+        Resources/Profiles/DryCenterArena.json
+        Resources/Profiles/LegatoSpace.json
+        Resources/Profiles/DarkHighGain.json
+        Resources/Profiles/BalladBloom.json
+        Resources/Profiles/ControlledCascade.json
+        Resources/Profiles/MonoRigPolish.json
+        Resources/Profiles/BufferBend.json
 )
 
 # The DSP translation units include their headers as "DSP/<name>.h", which
@@ -73,6 +96,7 @@ target_compile_definitions(ShredSpace
 target_link_libraries(ShredSpace
     PRIVATE
         ShredSpaceParameterSources
+        ShredSpaceProfiles
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
