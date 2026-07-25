@@ -25,6 +25,12 @@ void RoutingEngine::prepare (double sampleRate, int maxBlockSize, int numChannel
     fadeOldRamp_.resize (maxBlockSize_);
     fadeNewRamp_.resize (maxBlockSize_);
 
+    smoothedInputBypassGain_.resize (maxBlockSize_);
+    smoothedWetBypassGain_.resize (maxBlockSize_);
+
+    inputBypassRamp_.prepare (sampleRate_, 0.020);
+    wetBypassRamp_.prepare (sampleRate_, 0.020);
+
     crossfadeScratch_.setSize (numChannels_, maxBlockSize_, false, true, true);
     voiceAStaging_.setSize (numChannels_, maxBlockSize_, false, true, true);
     voiceBStaging_.setSize (numChannels_, maxBlockSize_, false, true, true);
@@ -45,6 +51,13 @@ void RoutingEngine::reset() noexcept
     rampCounter_ = 0;
 
     smoothersUpdatedForBlock_ = false;
+
+    float targetInputGain = (targetBypassMode_ == BypassMode::Off) ? 1.0f : 0.0f;
+    float targetWetGain = (targetBypassMode_ == BypassMode::Hard) ? 0.0f : 1.0f;
+    inputBypassRamp_.reset (targetInputGain);
+    wetBypassRamp_.reset (targetWetGain);
+    hardBypassTransitionActive_ = false;
+    tailClearRequested_ = false;
 }
 
 void RoutingEngine::setTopology (Topology topology) noexcept
@@ -79,6 +92,48 @@ void RoutingEngine::setMix (float mix) noexcept
     mixSmoother_.setTargetValue (std::clamp (mix, 0.0f, 1.0f));
 }
 
+void RoutingEngine::setBypassMode (BypassMode mode) noexcept
+{
+    if (mode == targetBypassMode_)
+        return;
+
+    targetBypassMode_ = mode;
+
+    float targetInputGain = (mode == BypassMode::Off) ? 1.0f : 0.0f;
+    float targetWetGain = (mode == BypassMode::Hard) ? 0.0f : 1.0f;
+
+    inputBypassRamp_.setTarget (targetInputGain);
+    wetBypassRamp_.setTarget (targetWetGain);
+
+    if (mode == BypassMode::Hard)
+    {
+        if (wetBypassRamp_.getCurrentValue() > 0.0f)
+        {
+            hardBypassTransitionActive_ = true;
+        }
+        else
+        {
+            hardBypassTransitionActive_ = false;
+        }
+    }
+    else
+    {
+        hardBypassTransitionActive_ = false;
+    }
+}
+
+float RoutingEngine::delayInputGain() const noexcept
+{
+    return inputBypassRamp_.getCurrentValue();
+}
+
+bool RoutingEngine::consumeTailClearRequest() noexcept
+{
+    bool requested = tailClearRequested_;
+    tailClearRequested_ = false;
+    return requested;
+}
+
 bool RoutingEngine::shouldProcessVoiceAFirst() const noexcept
 {
     if (targetTopology_ == Topology::BtoA)
@@ -99,6 +154,18 @@ void RoutingEngine::updateBlockState (int numSamples) noexcept
         smoothedCascade_[i] = cascadeSmoother_.getNextValue();
         smoothedLevelA_[i] = levelASmoother_.getNextValue();
         smoothedLevelB_[i] = levelBSmoother_.getNextValue();
+
+        smoothedInputBypassGain_[i] = inputBypassRamp_.getNextValue();
+
+        float prevWetGain = wetBypassRamp_.getCurrentValue();
+        float wetGain = wetBypassRamp_.getNextValue();
+        smoothedWetBypassGain_[i] = wetGain;
+
+        if (hardBypassTransitionActive_ && prevWetGain > 0.0f && wetGain == 0.0f)
+        {
+            hardBypassTransitionActive_ = false;
+            tailClearRequested_ = true;
+        }
 
         if (transitionState_ == TransitionState::fading)
         {
@@ -139,6 +206,17 @@ void RoutingEngine::updateBlockState (int numSamples) noexcept
             smoothedCascade_[i] = cascadeSmoother_.getNextValue();
             smoothedLevelA_[i] = levelASmoother_.getNextValue();
             smoothedLevelB_[i] = levelBSmoother_.getNextValue();
+
+            inputBypassRamp_.getNextValue();
+            float prevWetGain = wetBypassRamp_.getCurrentValue();
+            float wetGain = wetBypassRamp_.getNextValue();
+
+            if (hardBypassTransitionActive_ && prevWetGain > 0.0f && wetGain == 0.0f)
+            {
+                hardBypassTransitionActive_ = false;
+                tailClearRequested_ = true;
+            }
+
             fadeOldRamp_[i] = 1.0f;
             fadeNewRamp_[i] = 0.0f;
         }
@@ -170,15 +248,17 @@ void RoutingEngine::prepareVoiceAInput (const juce::AudioBuffer<float>& dryBuffe
             const float cos_c = std::cos (cascadeVal * pi_2);
             const float sin_c = std::sin (cascadeVal * pi_2);
 
+            const float dryInput = dry[i] * smoothedInputBypassGain_[i];
+
             // Compute input under source topology
-            float in_source = dry[i];
+            float in_source = dryInput;
             if (sourceTopology_ == Topology::BtoA)
-                in_source = cos_c * dry[i] + sin_c * voiceBOut[i];
+                in_source = cos_c * dryInput + sin_c * voiceBOut[i];
 
             // Compute input under target topology
-            float in_target = dry[i];
+            float in_target = dryInput;
             if (targetTopology_ == Topology::BtoA)
-                in_target = cos_c * dry[i] + sin_c * voiceBOut[i];
+                in_target = cos_c * dryInput + sin_c * voiceBOut[i];
 
             // Blend based on transition ramp
             voiceAIn[i] = fadeOldRamp_[i] * in_source + fadeNewRamp_[i] * in_target;
@@ -186,7 +266,7 @@ void RoutingEngine::prepareVoiceAInput (const juce::AudioBuffer<float>& dryBuffe
 
         // Fill safety limit excess if any
         for (int i = limit; i < numSamples; ++i)
-            voiceAIn[i] = dry[i];
+            voiceAIn[i] = dry[i] * inputBypassRamp_.getCurrentValue();
     }
 }
 
@@ -213,15 +293,17 @@ void RoutingEngine::prepareVoiceBInput (const juce::AudioBuffer<float>& dryBuffe
             const float cos_c = std::cos (cascadeVal * pi_2);
             const float sin_c = std::sin (cascadeVal * pi_2);
 
+            const float dryInput = dry[i] * smoothedInputBypassGain_[i];
+
             // Compute input under source topology
-            float in_source = dry[i];
+            float in_source = dryInput;
             if (sourceTopology_ == Topology::AtoB)
-                in_source = cos_c * dry[i] + sin_c * voiceAOut[i];
+                in_source = cos_c * dryInput + sin_c * voiceAOut[i];
 
             // Compute input under target topology
-            float in_target = dry[i];
+            float in_target = dryInput;
             if (targetTopology_ == Topology::AtoB)
-                in_target = cos_c * dry[i] + sin_c * voiceAOut[i];
+                in_target = cos_c * dryInput + sin_c * voiceAOut[i];
 
             // Blend based on transition ramp
             voiceBIn[i] = fadeOldRamp_[i] * in_source + fadeNewRamp_[i] * in_target;
@@ -229,7 +311,7 @@ void RoutingEngine::prepareVoiceBInput (const juce::AudioBuffer<float>& dryBuffe
 
         // Fill safety limit excess if any
         for (int i = limit; i < numSamples; ++i)
-            voiceBIn[i] = dry[i];
+            voiceBIn[i] = dry[i] * inputBypassRamp_.getCurrentValue();
     }
 }
 
@@ -267,6 +349,8 @@ void RoutingEngine::process (const juce::AudioBuffer<float>& dryBuffer,
             // this formally maps to the crossfade behavior of the two topologies).
             const float wet = fadeOldRamp_[i] * wet_source + fadeNewRamp_[i] * wet_target;
 
+            const float wetBypassed = wet * smoothedWetBypassGain_[i];
+
             // 2. Global mixing
             float dryGain = 0.0f;
             float wetGain = 1.0f;
@@ -277,7 +361,7 @@ void RoutingEngine::process (const juce::AudioBuffer<float>& dryBuffer,
                 wetGain = std::sin (mixVal * pi_2);
             }
 
-            out[i] = dryGain * dry[i] + wetGain * wet;
+            out[i] = dryGain * dry[i] + wetGain * wetBypassed;
         }
 
         // Fill safety limit excess if any

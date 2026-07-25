@@ -40,6 +40,8 @@
 #include "../Source/DSP/FractionalDelay.cpp"
 #include "../Source/DSP/FeedbackController.cpp"
 #include "../Source/DSP/StereoProcessor.cpp"
+#include "../Source/DSP/RoutingEngine.h"
+#include "../Source/DSP/RoutingEngine.cpp"
 
 namespace
 {
@@ -64,6 +66,7 @@ public:
         runTapMedianTest();
         runBpmFallbackTest();
         runStereoProcessorTests();
+        runRoutingEngineBypassTests();
     }
 
 private:
@@ -569,6 +572,141 @@ private:
                 sp.process (lBuf + start, rBuf + start, num);
             }
             expect (std::abs (sp.getCorrelation() - 0.0f) <= kFloatTol, "Correlation L only mismatch: " + juce::String (sp.getCorrelation()));
+        }
+    }
+
+    void runRoutingEngineBypassTests()
+    {
+        beginTest ("RoutingEngine - Bypass modes and transition ramps");
+
+        const double sampleRate = 44100.0;
+        const int maxBlockSize = 256;
+        const int numChannels = 2;
+
+        shredspace::RoutingEngine re;
+        re.prepare (sampleRate, maxBlockSize, numChannels);
+        re.reset();
+
+        // 1. Initial state (Off)
+        expectWithinAbsoluteError (re.delayInputGain(), 1.0f, kFloatTol, "Initial delayInputGain should be 1.0");
+        expect (! re.consumeTailClearRequest(), "consumeTailClearRequest should initially be false");
+
+        // 2. Transition Off -> Hard (20 ms = 882 samples at 44.1k)
+        re.setBypassMode (shredspace::RoutingEngine::BypassMode::Hard);
+        
+        juce::AudioBuffer<float> dry (numChannels, maxBlockSize);
+        juce::AudioBuffer<float> voiceAWet (numChannels, maxBlockSize);
+        juce::AudioBuffer<float> voiceBWet (numChannels, maxBlockSize);
+        juce::AudioBuffer<float> output (numChannels, maxBlockSize);
+        juce::AudioBuffer<float> voiceAIn (numChannels, maxBlockSize);
+        juce::AudioBuffer<float> voiceBIn (numChannels, maxBlockSize);
+
+        // Fill buffers with dummy signals
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            std::fill (dry.getWritePointer (ch), dry.getWritePointer (ch) + maxBlockSize, 1.0f);
+            std::fill (voiceAWet.getWritePointer (ch), voiceAWet.getWritePointer (ch) + maxBlockSize, 0.5f);
+            std::fill (voiceBWet.getWritePointer (ch), voiceBWet.getWritePointer (ch) + maxBlockSize, 0.5f);
+        }
+
+        // Process block by block
+        int totalProcessed = 0;
+        bool clearedTriggered = false;
+
+        // 20 ms at 44.1k is 882 samples. Process 4 blocks of 256 (1024 samples)
+        for (int block = 0; block < 4; ++block)
+        {
+            re.prepareVoiceAInput (dry, voiceBWet, voiceAIn);
+            re.prepareVoiceBInput (dry, voiceAWet, voiceBIn);
+            re.process (dry, voiceAWet, voiceBWet, output);
+
+            totalProcessed += maxBlockSize;
+
+            if (re.consumeTailClearRequest())
+            {
+                expect (! clearedTriggered, "consumeTailClearRequest triggered multiple times");
+                clearedTriggered = true;
+                expectWithinAbsoluteError (re.delayInputGain(), 0.0f, kFloatTol, "delayInputGain should be 0 when tail clear is requested");
+            }
+        }
+
+        expect (clearedTriggered, "consumeTailClearRequest was never triggered during Off -> Hard transition");
+        expectWithinAbsoluteError (re.delayInputGain(), 0.0f, kFloatTol, "delayInputGain should be 0 after transition to Hard");
+
+        // 3. Transition Hard -> Off (should ramp back to 1.0)
+        re.setBypassMode (shredspace::RoutingEngine::BypassMode::Off);
+        clearedTriggered = false;
+
+        for (int block = 0; block < 4; ++block)
+        {
+            re.prepareVoiceAInput (dry, voiceBWet, voiceAIn);
+            re.prepareVoiceBInput (dry, voiceAWet, voiceBIn);
+            re.process (dry, voiceAWet, voiceBWet, output);
+
+            if (re.consumeTailClearRequest())
+                clearedTriggered = true;
+        }
+
+        expect (! clearedTriggered, "Tail clear should not trigger when turning bypass Off");
+        expectWithinAbsoluteError (re.delayInputGain(), 1.0f, kFloatTol, "delayInputGain should be 1.0 after transition back to Off");
+
+        // 4. Transition Off -> Trails
+        re.setBypassMode (shredspace::RoutingEngine::BypassMode::Trails);
+        clearedTriggered = false;
+
+        for (int block = 0; block < 4; ++block)
+        {
+            re.prepareVoiceAInput (dry, voiceBWet, voiceAIn);
+            re.prepareVoiceBInput (dry, voiceAWet, voiceBIn);
+            re.process (dry, voiceAWet, voiceBWet, output);
+
+            if (re.consumeTailClearRequest())
+                clearedTriggered = true;
+        }
+
+        expect (! clearedTriggered, "Tail clear should not trigger during Off -> Trails transition");
+        expectWithinAbsoluteError (re.delayInputGain(), 0.0f, kFloatTol, "delayInputGain should be 0.0 after transition to Trails");
+
+        // Verify that in Trails bypass, the wet path output is NOT muted
+        re.setMix (1.0f);
+        re.setVoiceLevels (1.0f, 1.0f);
+        
+        re.prepareVoiceAInput (dry, voiceBWet, voiceAIn);
+        re.prepareVoiceBInput (dry, voiceAWet, voiceBIn);
+        re.process (dry, voiceAWet, voiceBWet, output);
+
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            const float* outPtr = output.getReadPointer (ch);
+            for (int i = 0; i < maxBlockSize; ++i)
+            {
+                expect (outPtr[i] > 0.1f, "Wet path output is muted in Trails bypass mode");
+            }
+        }
+
+        // 5. Transition Trails -> Hard
+        re.setBypassMode (shredspace::RoutingEngine::BypassMode::Hard);
+        clearedTriggered = false;
+
+        for (int block = 0; block < 5; ++block)
+        {
+            re.prepareVoiceAInput (dry, voiceBWet, voiceAIn);
+            re.prepareVoiceBInput (dry, voiceAWet, voiceBIn);
+            re.process (dry, voiceAWet, voiceBWet, output);
+
+            if (re.consumeTailClearRequest())
+                clearedTriggered = true;
+        }
+
+        expect (clearedTriggered, "Tail clear should trigger when transitioning Trails -> Hard");
+        
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            const float* outPtr = output.getReadPointer (ch);
+            for (int i = 0; i < maxBlockSize; ++i)
+            {
+                expectWithinAbsoluteError (outPtr[i], 0.0f, kFloatTol, "Wet path output is not muted in Hard bypass mode");
+            }
         }
     }
 };

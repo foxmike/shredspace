@@ -9,6 +9,60 @@
 namespace shredspace
 {
 
+class ClickFreeRamp
+{
+public:
+    ClickFreeRamp() = default;
+
+    void prepare (double sampleRate, double durationSeconds) noexcept
+    {
+        sampleRate_ = sampleRate > 0.0 ? sampleRate : 44100.0;
+        durationSeconds_ = durationSeconds > 0.0 ? durationSeconds : 0.020;
+        updateStep();
+    }
+
+    void reset (float initialValue) noexcept
+    {
+        current_ = initialValue;
+        target_ = initialValue;
+    }
+
+    void setTarget (float targetValue) noexcept
+    {
+        target_ = targetValue;
+    }
+
+    float getNextValue() noexcept
+    {
+        if (current_ == target_)
+            return current_;
+
+        if (current_ < target_)
+            current_ = std::min (target_, current_ + step_);
+        else
+            current_ = std::max (target_, current_ - step_);
+
+        return current_;
+    }
+
+    [[nodiscard]] float getCurrentValue() const noexcept { return current_; }
+    [[nodiscard]] float getTargetValue() const noexcept { return target_; }
+    [[nodiscard]] bool isRamping() const noexcept { return current_ != target_; }
+
+private:
+    void updateStep() noexcept
+    {
+        double numSamples = sampleRate_ * durationSeconds_;
+        step_ = numSamples > 0.0 ? static_cast<float> (1.0 / numSamples) : 1.0f;
+    }
+
+    double sampleRate_ { 44100.0 };
+    double durationSeconds_ { 0.020 };
+    float current_ { 1.0f };
+    float target_ { 1.0f };
+    float step_ { 0.0f };
+};
+
 /**
  * RoutingEngine implements the three static voice topologies (Parallel, A-into-B, B-into-A),
  * wet voice normalization, and global mixing.
@@ -103,10 +157,27 @@ public:
      */
     [[nodiscard]] bool shouldProcessVoiceAFirst() const noexcept;
 
+    enum class BypassMode
+    {
+        Off,
+        Hard,
+        Trails
+    };
+
+    /**
+     * Sets the bypass mode. Smoothly fades in/out over 20 ms.
+     */
+    void setBypassMode (BypassMode mode) noexcept;
+
     /**
      * Returns the gain scaler for the voice inputs (used for trails bypass in f.4).
      */
-    [[nodiscard]] float delayInputGain() const noexcept { return 1.0f; }
+    [[nodiscard]] float delayInputGain() const noexcept;
+
+    /**
+     * Returns true exactly once when a hard-bypass fade completes.
+     */
+    [[nodiscard]] bool consumeTailClearRequest() noexcept;
 
     // Debugging / testing getters
     [[nodiscard]] const std::vector<float>& getFadeOldRamp() const noexcept { return fadeOldRamp_; }
@@ -149,6 +220,15 @@ private:
     std::vector<float> smoothedLevelB_;
     std::vector<float> fadeOldRamp_;
     std::vector<float> fadeNewRamp_;
+
+    BypassMode targetBypassMode_ { BypassMode::Off };
+    ClickFreeRamp inputBypassRamp_;
+    ClickFreeRamp wetBypassRamp_;
+    bool hardBypassTransitionActive_ { false };
+    bool tailClearRequested_ { false };
+
+    std::vector<float> smoothedInputBypassGain_;
+    std::vector<float> smoothedWetBypassGain_;
 
     // Allocated scratch/staging buffers as required by f.1 instructions
     juce::AudioBuffer<float> crossfadeScratch_;
