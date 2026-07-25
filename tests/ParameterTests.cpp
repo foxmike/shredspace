@@ -710,3 +710,229 @@ private:
 static ShredSpaceDelayTimeControllerTests sShredSpaceDelayTimeControllerTestsInstance;
 
 } // namespace
+
+#include "../Source/Profiles/ProfileSchema.h"
+#include "../Source/Profiles/ProfileSchema.cpp"
+
+namespace
+{
+
+class ProfileSchemaTests final : public juce::UnitTest
+{
+public:
+    ProfileSchemaTests()
+        : juce::UnitTest ("ProfileSchema", "ShredSpace Profiles")
+    {}
+
+    juce::StringArray getAllowedIDs()
+    {
+        juce::StringArray ids;
+        for (const auto* id : kAllParameterIds)
+            ids.add (id);
+        return ids;
+    }
+
+    void runTest() override
+    {
+        auto allowedIDs = getAllowedIDs();
+
+        // 1. Test Valid profile JSON
+        {
+            beginTest ("Valid Profile Parsing");
+            juce::var json (new juce::DynamicObject());
+            json.getDynamicObject()->setProperty ("schema_version", 1);
+            json.getDynamicObject()->setProperty ("product_version", "1.0.0");
+            json.getDynamicObject()->setProperty ("profile_name", "Clean Room");
+            json.getDynamicObject()->setProperty ("author", "Engineer");
+            json.getDynamicObject()->setProperty ("description", "A clean test profile");
+
+            juce::var baseVals (new juce::DynamicObject());
+            baseVals.getDynamicObject()->setProperty ("GLOBAL_INPUT_GAIN", 1.5f);
+            baseVals.getDynamicObject()->setProperty ("PERF_MACRO_TIME", 120.0f);
+            json.getDynamicObject()->setProperty ("base_parameter_values", baseVals);
+
+            juce::var macroMapping (new juce::DynamicObject());
+            for (const auto* macroName : shredspace::kMacroNames)
+            {
+                juce::Array<juce::var> dests;
+                if (juce::String (macroName) == "TIME")
+                {
+                    juce::var dest (new juce::DynamicObject());
+                    dest.getDynamicObject()->setProperty ("destination_parameter_id", "VOICE_A_TIME_RATIO");
+                    dest.getDynamicObject()->setProperty ("delta_min", 0.1f);
+                    dest.getDynamicObject()->setProperty ("delta_max", 0.5f);
+                    dest.getDynamicObject()->setProperty ("curve", 1.2f);
+                    dests.add (dest);
+                }
+                macroMapping.getDynamicObject()->setProperty (macroName, dests);
+            }
+            json.getDynamicObject()->setProperty ("macro_mapping", macroMapping);
+
+            juce::Array<juce::var> scenes;
+            for (int i = 0; i < 4; ++i)
+            {
+                juce::var scene (new juce::DynamicObject());
+                for (const auto* macroName : shredspace::kMacroNames)
+                {
+                    scene.getDynamicObject()->setProperty (macroName, 0.5f);
+                }
+
+                juce::var mixTarget (new juce::DynamicObject());
+                mixTarget.getDynamicObject()->setProperty ("parameter_id", "GLOBAL_MIX");
+                mixTarget.getDynamicObject()->setProperty ("value", 50.0f);
+                scene.getDynamicObject()->setProperty ("mix_target", mixTarget);
+
+                juce::var routingTarget (new juce::DynamicObject());
+                routingTarget.getDynamicObject()->setProperty ("parameter_id", "PERF_ROUTING");
+                routingTarget.getDynamicObject()->setProperty ("value", 1.0f);
+                scene.getDynamicObject()->setProperty ("routing_target", routingTarget);
+
+                scene.getDynamicObject()->setProperty ("hold_behavior", "Momentary");
+                scenes.add (scene);
+            }
+            json.getDynamicObject()->setProperty ("scene_values", scenes);
+
+            juce::Array<juce::var> tags;
+            tags.add ("clean");
+            tags.add ("reverb");
+            json.getDynamicObject()->setProperty ("tags", tags);
+
+            auto [doc, result] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (result.ok);
+            expectEquals (doc.schema_version, 1);
+            expectEquals (doc.profile_name, juce::String ("Clean Room"));
+            expectEquals (doc.base_parameter_values["GLOBAL_INPUT_GAIN"], 1.5f);
+            expectEquals (doc.base_parameter_values["PERF_MACRO_TIME"], 120.0f);
+            expectEquals (doc.tags[0], juce::String ("clean"));
+            expectEquals ((int) doc.scene_values.size(), 4);
+            expect (doc.scene_values[0].hold_behavior == shredspace::HoldBehavior::Momentary);
+        }
+
+        // 2. Test Rule 1: Schema Version validation
+        {
+            beginTest ("Rule 1: Schema Version checks");
+            juce::var json (new juce::DynamicObject());
+            auto [doc1, result1] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (! result1.ok);
+
+            json.getDynamicObject()->setProperty ("schema_version", "one");
+            auto [doc2, result2] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (! result2.ok);
+
+            json.getDynamicObject()->setProperty ("schema_version", 0);
+            auto [doc3, result3] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (! result3.ok);
+
+            json.getDynamicObject()->setProperty ("schema_version", 2);
+            auto [doc4, result4] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (! result4.ok);
+        }
+
+        // 3. Test Rule 3 & 5: Migration and clamping
+        {
+            beginTest ("Rule 3 & 5: Migration of unknown IDs and clamping");
+            juce::var json (new juce::DynamicObject());
+            json.getDynamicObject()->setProperty ("schema_version", 1);
+
+            juce::var baseVals (new juce::DynamicObject());
+            baseVals.getDynamicObject()->setProperty ("UNKNOWN_ID", 10.0f);
+            baseVals.getDynamicObject()->setProperty ("GLOBAL_INPUT_GAIN", 30.0f);
+            json.getDynamicObject()->setProperty ("base_parameter_values", baseVals);
+
+            juce::var macroMapping (new juce::DynamicObject());
+            for (const auto* macroName : shredspace::kMacroNames)
+            {
+                juce::Array<juce::var> dests;
+                if (juce::String (macroName) == "TIME")
+                {
+                    juce::var dest (new juce::DynamicObject());
+                    dest.getDynamicObject()->setProperty ("destination_parameter_id", "UNKNOWN_DEST_ID");
+                    dest.getDynamicObject()->setProperty ("delta_min", 0.0f);
+                    dest.getDynamicObject()->setProperty ("delta_max", 1.0f);
+                    dests.add (dest);
+                }
+                macroMapping.getDynamicObject()->setProperty (macroName, dests);
+            }
+            json.getDynamicObject()->setProperty ("macro_mapping", macroMapping);
+
+            juce::Array<juce::var> scenes;
+            for (int i = 0; i < 4; ++i)
+            {
+                juce::var scene (new juce::DynamicObject());
+                for (const auto* macroName : shredspace::kMacroNames)
+                    scene.getDynamicObject()->setProperty (macroName, 0.5f);
+
+                juce::var mixTarget (new juce::DynamicObject());
+                mixTarget.getDynamicObject()->setProperty ("parameter_id", "UNKNOWN_MIX_ID");
+                mixTarget.getDynamicObject()->setProperty ("value", 50.0f);
+                scene.getDynamicObject()->setProperty ("mix_target", mixTarget);
+
+                juce::var routingTarget (new juce::DynamicObject());
+                routingTarget.getDynamicObject()->setProperty ("parameter_id", "PERF_ROUTING");
+                routingTarget.getDynamicObject()->setProperty ("value", 1.0f);
+                scene.getDynamicObject()->setProperty ("routing_target", routingTarget);
+
+                scene.getDynamicObject()->setProperty ("hold_behavior", "Latch");
+                scenes.add (scene);
+            }
+            json.getDynamicObject()->setProperty ("scene_values", scenes);
+
+            auto [doc, result] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (result.ok);
+            expect (doc.base_parameter_values.find ("UNKNOWN_ID") == doc.base_parameter_values.end());
+            expectEquals (doc.base_parameter_values["GLOBAL_INPUT_GAIN"], 24.0f);
+            expect (doc.macro_mapping["TIME"].empty());
+            expect (doc.scene_values[0].mix_target.parameter_id.isEmpty());
+            expectEquals (doc.scene_values[0].mix_target.value, 0.0f);
+            expect (result.migration_notes.size() > 0);
+            expect (result.migration_notes.contains ("dropped unknown parameter id: UNKNOWN_ID"));
+            expect (result.migration_notes.contains ("dropped unknown parameter id: UNKNOWN_DEST_ID"));
+            expect (result.migration_notes.contains ("dropped unknown parameter id: UNKNOWN_MIX_ID"));
+        }
+
+        // 4. Test Rule 4: Malformed input fails safely
+        {
+            beginTest ("Rule 4: Malformed input failures");
+            juce::var json (new juce::DynamicObject());
+            json.getDynamicObject()->setProperty ("schema_version", 1);
+
+            juce::var macroMapping (new juce::DynamicObject());
+            for (const auto* macroName : shredspace::kMacroNames)
+            {
+                juce::Array<juce::var> dests;
+                if (juce::String (macroName) == "TIME")
+                {
+                    juce::var dest (new juce::DynamicObject());
+                    dest.getDynamicObject()->setProperty ("destination_parameter_id", "VOICE_A_TIME_RATIO");
+                    dest.getDynamicObject()->setProperty ("delta_min", 0.0f);
+                    dest.getDynamicObject()->setProperty ("delta_max", 1.0f);
+                    dest.getDynamicObject()->setProperty ("curve", -0.1f);
+                    dests.add (dest);
+                }
+                macroMapping.getDynamicObject()->setProperty (macroName, dests);
+            }
+            json.getDynamicObject()->setProperty ("macro_mapping", macroMapping);
+
+            auto [doc1, result1] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (! result1.ok);
+
+            macroMapping.getDynamicObject()->removeProperty ("TIME");
+            {
+                juce::Array<juce::var> dests;
+                juce::var dest (new juce::DynamicObject());
+                dest.getDynamicObject()->setProperty ("destination_parameter_id", "VOICE_A_TIME_RATIO");
+                dest.getDynamicObject()->setProperty ("delta_min", std::numeric_limits<double>::infinity());
+                dest.getDynamicObject()->setProperty ("delta_max", 1.0f);
+                dests.add (dest);
+                macroMapping.getDynamicObject()->setProperty ("TIME", dests);
+            }
+            auto [doc2, result2] = shredspace::ProfileSchema::parse (json, allowedIDs);
+            expect (! result2.ok);
+        }
+    }
+};
+
+static ProfileSchemaTests sProfileSchemaTestsInstance;
+
+} // namespace
+
