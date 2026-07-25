@@ -121,6 +121,7 @@ add_executable(ShredSpaceTests
     tests/SafetyHoldTests.cpp
     tests/StaticSignalPathTests.cpp
     tests/AnalysisTests.cpp
+    tests/ProfileMacroSceneTests.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters/ParameterLayout.cpp
