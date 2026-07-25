@@ -1,0 +1,1 @@
+{"task_id":"h.1","phase_id":"H","run_id":"999b852a-b62c-4312-b714-1e351545b50c","accepted_at":"2026-07-25T01:36:01.205156","files_added":["Source/Analysis/AdaptiveSnapshot.h"],"files_modified":[],"public_symbols_added":[],"public_symbols_removed":[],"dependencies_added":[],"description_summary":"Define pod adaptive snapshot with atomic double buffer publication"}
