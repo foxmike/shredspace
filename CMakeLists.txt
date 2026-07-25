@@ -41,6 +41,12 @@ target_sources(ShredSpace
         Source/DSP/StereoProcessor.cpp
         Source/DSP/RoutingEngine.cpp
         Source/DSP/SafetyProcessor.cpp
+        Source/Analysis/AnalysisResampler.cpp
+        Source/Analysis/PerformanceAnalyzer.cpp
+        Source/Analysis/OnsetDetector.cpp
+        Source/Analysis/DensityEstimator.cpp
+        Source/Analysis/SustainEstimator.cpp
+        Source/Analysis/AdaptiveController.cpp
 )
 
 # The DSP translation units include their headers as "DSP/<name>.h", which
@@ -90,11 +96,18 @@ add_executable(ShredSpaceTests
     tests/MotionStereoTests.cpp
     tests/SafetyHoldTests.cpp
     tests/StaticSignalPathTests.cpp
+    tests/AnalysisTests.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters/ParameterLayout.cpp
     Source/Parameters/ParameterSnapshot.cpp
     Source/DSP/ShortDiffuser.cpp
+    Source/Analysis/AnalysisResampler.cpp
+    Source/Analysis/PerformanceAnalyzer.cpp
+    Source/Analysis/OnsetDetector.cpp
+    Source/Analysis/DensityEstimator.cpp
+    Source/Analysis/SustainEstimator.cpp
+    Source/Analysis/AdaptiveController.cpp
 )
 
 target_include_directories(ShredSpaceTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
