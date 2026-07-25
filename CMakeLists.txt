@@ -130,6 +130,7 @@ add_executable(ShredSpaceTests
     tests/StaticSignalPathTests.cpp
     tests/AnalysisTests.cpp
     tests/ProfileMacroSceneTests.cpp
+    tests/StateRoundTripTests.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Telemetry/TelemetryState.cpp
