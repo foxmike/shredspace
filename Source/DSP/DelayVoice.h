@@ -48,6 +48,12 @@ public:
     void setDiffusionAmount (float d) noexcept;
 
     /**
+     * Engages or releases the dedicated Hold preservation loop.
+     * Both transitions use a 30 ms equal-power crossfade.
+     */
+    void setHold (bool shouldHold) noexcept;
+
+    /**
      * Processes an in-place stereo buffer.
      *
      * timeTarget is the result for this voice supplied by
@@ -66,6 +72,9 @@ public:
 private:
     void applyTimeTarget (const VoiceResult& timeTarget,
                           double glideMilliseconds) noexcept;
+    [[nodiscard]] float processHoldSample (float input,
+                                           int channel) noexcept;
+    void advanceHoldCrossfade() noexcept;
 
     FractionalDelay leftDelay_;
     FractionalDelay rightDelay_;
@@ -78,9 +87,20 @@ private:
     SoftSaturator rightSaturator_;
     ShortDiffuser shortDiffuser_;
 
+    static constexpr double kHoldCrossfadeSeconds = 0.030;
+    static constexpr float kHoldFeedbackGain = 0.985f;
+    static constexpr double kHoldDcBlockerR = 0.995;
+
     double sampleRate_ { 1.0 };
-    float previousLoopOutputLeft_ {};
-    float previousLoopOutputRight_ {};
+    float previousNormalLoopOutputLeft_ {};
+    float previousNormalLoopOutputRight_ {};
+    float previousHoldLoopOutputLeft_ {};
+    float previousHoldLoopOutputRight_ {};
+    double holdPreviousInput_[2] {};
+    double holdPreviousOutput_[2] {};
+    double holdCrossfade_ {};
+    double holdCrossfadeStep_ { 1.0 };
+    bool holdRequested_ {};
     bool hasTimeTarget_ {};
 };
 
