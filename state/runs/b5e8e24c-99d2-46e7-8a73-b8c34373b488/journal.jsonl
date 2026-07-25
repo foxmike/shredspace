@@ -1,0 +1,1 @@
+{"task_id":"g.7","phase_id":"G","run_id":"b5e8e24c-99d2-46e7-8a73-b8c34373b488","accepted_at":"2026-07-25T01:34:29.310582","files_added":["tests/AnalysisTests.cpp"],"files_modified":["CMakeLists.txt"],"public_symbols_added":[],"public_symbols_removed":[],"dependencies_added":[],"description_summary":"Create analyzer synthetic and rate equivalence tests"}
