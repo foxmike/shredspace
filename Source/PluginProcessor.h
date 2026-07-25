@@ -10,6 +10,12 @@
 #include "DSP/RoutingEngine.h"
 #include "DSP/SafetyProcessor.h"
 #include "DSP/StereoProcessor.h"
+#include "Telemetry/TelemetryState.h"
+#include "Analysis/PerformanceAnalyzer.h"
+#include "Analysis/OnsetDetector.h"
+#include "Analysis/DensityEstimator.h"
+#include "Analysis/SustainEstimator.h"
+#include "Analysis/AdaptiveController.h"
 
 class ShredSpaceAudioProcessorEditor;
 
@@ -45,6 +51,7 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }
+    shredspace::TelemetryState& getTelemetryState() noexcept { return telemetry; }
 
 private:
     static constexpr int kProcessingChannels = 2;
@@ -57,6 +64,13 @@ private:
     shredspace::RoutingEngine routingEngine;
     shredspace::StereoProcessor stereoProcessor;
     shredspace::SafetyProcessor safetyProcessor;
+
+    shredspace::PerformanceAnalyzer performanceAnalyzer;
+    shredspace::OnsetDetector onsetDetector;
+    shredspace::DensityEstimator densityEstimator;
+    shredspace::SustainEstimator sustainEstimator;
+    shredspace::AdaptiveController adaptiveController;
+    shredspace::TelemetryState telemetry;
 
     juce::AudioBuffer<float> dryBuffer;
     juce::AudioBuffer<float> voiceABuffer;

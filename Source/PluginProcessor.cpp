@@ -80,6 +80,14 @@ void ShredSpaceAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     stereoProcessor.prepare (sampleRate, maximumBlockSize);
     safetyProcessor.prepare (sampleRate, maximumBlockSize, kProcessingChannels);
 
+    performanceAnalyzer.prepare (sampleRate, maximumBlockSize);
+    const int maxAnalysis = static_cast<int> (std::ceil (maximumBlockSize * (48000.0 / 44100.0))) + 64;
+    onsetDetector.prepare (maxAnalysis);
+    densityEstimator.prepare();
+    sustainEstimator.prepare();
+    adaptiveController.prepare();
+    telemetry.prepare();
+
     dryBuffer.setSize (kProcessingChannels, maximumBlockSize, false, true, true);
     voiceABuffer.setSize (kProcessingChannels, maximumBlockSize, false, true, true);
     voiceBBuffer.setSize (kProcessingChannels, maximumBlockSize, false, true, true);
@@ -152,6 +160,82 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     dryBuffer.copyFrom (1, 0, buffer,
                         totalNumInputChannels > 1 ? 1 : 0,
                         0, numSamples);
+
+    // --- Sidechain Analysis ---
+    {
+        // 1. Configure parameters
+        densityEstimator.setWindowDuration (parameters.intelligence.densityWindowMs * 0.001);
+        densityEstimator.setDensityStart (parameters.intelligence.densityStartEventsPerSecond);
+        densityEstimator.setDensityFull (parameters.intelligence.densityFullEventsPerSecond);
+
+        sustainEstimator.setGateDb (parameters.intelligence.inputGateDb);
+        sustainEstimator.setSustainStart (parameters.intelligence.sustainStartMs * 0.001f);
+        sustainEstimator.setSustainFull (parameters.intelligence.sustainFullMs * 0.001f);
+        sustainEstimator.setGapDuration (parameters.intelligence.phraseGapMs * 0.001f);
+
+        onsetDetector.setThreshold (parameters.intelligence.sensitivityPercent * 0.01f);
+        onsetDetector.setNoiseGateDb (parameters.intelligence.inputGateDb);
+
+        adaptiveController.setBloomAmount (parameters.macroBloomPercent * 0.01f);
+        adaptiveController.setDefinition (parameters.macroDefinitionPercent * 0.01f);
+
+        shredspace::AdaptiveController::Mode mode = shredspace::AdaptiveController::Mode::Off;
+        if (parameters.adaptiveMode == 1)
+            mode = shredspace::AdaptiveController::Mode::Level;
+        else if (parameters.adaptiveMode == 2)
+            mode = shredspace::AdaptiveController::Mode::Articulation;
+        adaptiveController.setMode (mode);
+
+        adaptiveController.setDestinationDepths (
+            parameters.intelligence.wetReductionDb,
+            parameters.intelligence.wetLiftDb,
+            parameters.intelligence.tailReductionOctaves,
+            parameters.intelligence.tailExpansionOctaves,
+            parameters.intelligence.toneDarkeningOctaves,
+            parameters.intelligence.toneOpeningOctaves,
+            parameters.intelligence.widthReductionPercent * 0.01f,
+            parameters.intelligence.widthExpansionPercent * 0.01f,
+            parameters.intelligence.attackSoftenIncreasePercent * 0.01f,
+            parameters.intelligence.diffusionIncreasePercent * 0.01f
+        );
+
+        // 2. Process
+        const float* leftDry = dryBuffer.getReadPointer (0);
+        const float* rightDry = dryBuffer.getReadPointer (1);
+        performanceAnalyzer.process (leftDry, rightDry, kProcessingChannels, numSamples);
+
+        const float* analysisSamples = performanceAnalyzer.getAnalysisBuffer();
+        const int numAnalysis = performanceAnalyzer.getNumAnalysisSamples();
+
+        onsetDetector.process (analysisSamples,
+                               numAnalysis,
+                               performanceAnalyzer.getTimeNovelty(),
+                               performanceAnalyzer.getSlowEnvelopeDb());
+
+        int acceptedCount = 0;
+        const auto* acceptedOnsets = onsetDetector.consumeAcceptedOnsets (acceptedCount);
+        for (int i = 0; i < acceptedCount; ++i)
+        {
+            densityEstimator.pushOnset (static_cast<std::int64_t> (acceptedOnsets[i].analysisSampleIndex));
+        }
+        densityEstimator.advance (numAnalysis);
+
+        const float timeSinceLastOnset =
+            static_cast<float> (onsetDetector.getSamplesSinceLastOnset()) / 48000.0f;
+
+        sustainEstimator.process (performanceAnalyzer.getSlowEnvelopeDb(),
+                                  timeSinceLastOnset,
+                                  densityEstimator.getDensity(),
+                                  onsetDetector.getSmoothedOnsetActivity(),
+                                  numAnalysis);
+
+        adaptiveController.process (densityEstimator.getDensity(),
+                                    onsetDetector.getSmoothedOnsetActivity(),
+                                    sustainEstimator.getSustain(),
+                                    sustainEstimator.getPhraseGap(),
+                                    sustainEstimator.getActivity(),
+                                    numAnalysis);
+    }
 
     float* dryChannels[] {
         dryBuffer.getWritePointer (0),
@@ -323,6 +407,34 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     for (int channel = 0; channel < totalNumOutputChannels; ++channel)
         if (buffer.getNumSamples() > numSamples)
             buffer.clear (channel, numSamples, buffer.getNumSamples() - numSamples);
+
+    // --- Telemetry Publication ---
+    {
+        const float lPeak = buffer.getMagnitude (0, 0, numSamples);
+        const float rPeak = buffer.getNumChannels() > 1 ? buffer.getMagnitude (1, 0, numSamples) : lPeak;
+        const float lRms  = buffer.getRMSLevel (0, 0, numSamples);
+        const float rRms  = buffer.getNumChannels() > 1 ? buffer.getRMSLevel (1, 0, numSamples) : lRms;
+
+        telemetry.setLeftPeak (lPeak);
+        telemetry.setRightPeak (rPeak);
+        telemetry.setLeftRms (lRms);
+        telemetry.setRightRms (rRms);
+
+        telemetry.setActivity (sustainEstimator.getActivity());
+        telemetry.setDensity (densityEstimator.getDensity());
+        telemetry.setSustain (sustainEstimator.getSustain());
+        telemetry.setContraction (adaptiveController.getContraction());
+        telemetry.setBloom (adaptiveController.getBloom());
+        telemetry.setCorrelation (stereoProcessor.getCorrelation());
+        telemetry.setSafetyEngaged (safetyProcessor.safetyInterventionOccurred());
+
+        shredspace::HistorySample historySample;
+        historySample.onset = onsetDetector.getSmoothedOnsetActivity();
+        historySample.density = densityEstimator.getDensity();
+        historySample.sustain = sustainEstimator.getSustain();
+        historySample.gap = sustainEstimator.getPhraseGap();
+        telemetry.pushHistory (historySample);
+    }
 }
 
 bool ShredSpaceAudioProcessor::hasEditor() const

@@ -28,6 +28,7 @@ target_sources(ShredSpace
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
+        Source/Telemetry/TelemetryState.cpp
         Source/DSP/FractionalDelay.cpp
         Source/DSP/FeedbackController.cpp
         Source/DSP/DelayTimeController.cpp
@@ -124,6 +125,7 @@ add_executable(ShredSpaceTests
     tests/ProfileMacroSceneTests.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/Telemetry/TelemetryState.cpp
     Source/Parameters/ParameterLayout.cpp
     Source/Parameters/ParameterSnapshot.cpp
     Source/DSP/ShortDiffuser.cpp
