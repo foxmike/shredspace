@@ -88,6 +88,7 @@ add_executable(ShredSpaceTests
     tests/DspCoreTests.cpp
     tests/RepeatChainTests.cpp
     tests/MotionStereoTests.cpp
+    tests/SafetyHoldTests.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters/ParameterLayout.cpp
