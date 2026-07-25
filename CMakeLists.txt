@@ -29,6 +29,13 @@ target_sources(ShredSpace
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/Telemetry/TelemetryState.cpp
+        Source/GUI/CustomLookAndFeel.cpp
+        Source/GUI/MeterComponent.cpp
+        Source/GUI/PerformancePage.cpp
+        Source/GUI/VoicesPage.cpp
+        Source/GUI/ToneMotionPage.cpp
+        Source/GUI/IntelligencePage.cpp
+        Source/GUI/DetectorDisplay.cpp
         Source/DSP/FractionalDelay.cpp
         Source/DSP/FeedbackController.cpp
         Source/DSP/DelayTimeController.cpp
@@ -126,6 +133,13 @@ add_executable(ShredSpaceTests
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Telemetry/TelemetryState.cpp
+    Source/GUI/CustomLookAndFeel.cpp
+    Source/GUI/MeterComponent.cpp
+    Source/GUI/PerformancePage.cpp
+    Source/GUI/VoicesPage.cpp
+    Source/GUI/ToneMotionPage.cpp
+    Source/GUI/IntelligencePage.cpp
+    Source/GUI/DetectorDisplay.cpp
     Source/Parameters/ParameterLayout.cpp
     Source/Parameters/ParameterSnapshot.cpp
     Source/DSP/ShortDiffuser.cpp
