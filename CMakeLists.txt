@@ -89,6 +89,7 @@ add_executable(ShredSpaceTests
     tests/RepeatChainTests.cpp
     tests/MotionStereoTests.cpp
     tests/SafetyHoldTests.cpp
+    tests/StaticSignalPathTests.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters/ParameterLayout.cpp
