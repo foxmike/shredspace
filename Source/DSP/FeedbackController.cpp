@@ -37,13 +37,21 @@ void FeedbackController::setCrossFeedback (float q) noexcept
     crossFeedbackSmoother_.setTargetValue (crossFeedbackTarget_);
 }
 
+void FeedbackController::setFeedbackGainCeiling (float ceiling) noexcept
+{
+    feedbackGainCeiling_ = std::isfinite (ceiling)
+        ? std::clamp (static_cast<double> (ceiling), 0.0, kMaxFeedbackGain)
+        : 0.0;
+}
+
 double FeedbackController::processSample (double delayTimeSeconds,
                                           double tailScaleVoice) noexcept
 {
     advanceSmoothing (1);
-    return calculateGain (getSmoothedT60(),
-                          tailScaleVoice,
-                          delayTimeSeconds);
+    return std::min (calculateGain (getSmoothedT60(),
+                                    tailScaleVoice,
+                                    delayTimeSeconds),
+                     feedbackGainCeiling_);
 }
 
 FeedbackController::StereoFeedback FeedbackController::processStereoSample (

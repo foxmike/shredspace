@@ -39,6 +39,8 @@ target_sources(ShredSpace
         Source/DSP/SoftSaturator.cpp
         Source/DSP/ShortDiffuser.cpp
         Source/DSP/StereoProcessor.cpp
+        Source/DSP/RoutingEngine.cpp
+        Source/DSP/SafetyProcessor.cpp
 )
 
 # The DSP translation units include their headers as "DSP/<name>.h", which

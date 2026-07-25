@@ -41,6 +41,12 @@ public:
     /** Supplies the global T60 target to this voice's feedback controller. */
     void setT60Target (double T60GlobalSeconds) noexcept;
 
+    /** Sets normalized stereo cross-feedback in [0, 1]. */
+    void setCrossFeedback (float q) noexcept;
+
+    /** Applies the current safety processor feedback ceiling. */
+    void setFeedbackGainCeiling (float ceiling) noexcept;
+
     /** Sets the in-loop saturation amount in [0, 1]. */
     void setSaturationAmount (float s) noexcept;
 

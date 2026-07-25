@@ -144,8 +144,20 @@ public:
                              juce::AudioBuffer<float>& voiceBInputBuffer) noexcept;
 
     /**
-     * Processes the final mix. Combines wet voice contributions, applies wet normalization,
-     * performs global mixing, and writes the output.
+     * Combines the voice outputs, applies wet normalization and bypass, and
+     * writes a wet-only buffer. Call mix() after downstream wet processing.
+     */
+    void processWet (juce::AudioBuffer<float>& voiceAWetBuffer,
+                     juce::AudioBuffer<float>& voiceBWetBuffer,
+                     juce::AudioBuffer<float>& wetBuffer) noexcept;
+
+    /** Applies the configured Insert or Send global mix. */
+    void mix (const juce::AudioBuffer<float>& dryBuffer,
+              const juce::AudioBuffer<float>& wetBuffer,
+              juce::AudioBuffer<float>& outputBuffer) noexcept;
+
+    /**
+     * Compatibility wrapper which performs processWet() followed by mix().
      */
     void process (const juce::AudioBuffer<float>& dryBuffer,
                   juce::AudioBuffer<float>& voiceAWetBuffer,

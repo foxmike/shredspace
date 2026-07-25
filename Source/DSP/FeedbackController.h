@@ -42,6 +42,9 @@ public:
     /** Sets the normalized stereo cross-feedback amount in [0, 1]. */
     void setCrossFeedback (float q) noexcept;
 
+    /** Sets an external safety ceiling in [0, 0.985]. */
+    void setFeedbackGainCeiling (float ceiling) noexcept;
+
     /**
      * Advances T60 smoothing by one sample and returns this voice's gain.
      */
@@ -92,6 +95,7 @@ private:
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>
         crossFeedbackSmoother_;
     float crossFeedbackTarget_ {};
+    double feedbackGainCeiling_ { kMaxFeedbackGain };
 };
 
 } // namespace shredspace

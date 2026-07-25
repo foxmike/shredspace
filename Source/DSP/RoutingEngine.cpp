@@ -315,13 +315,47 @@ void RoutingEngine::prepareVoiceBInput (const juce::AudioBuffer<float>& dryBuffe
     }
 }
 
-void RoutingEngine::process (const juce::AudioBuffer<float>& dryBuffer,
-                             juce::AudioBuffer<float>& voiceAWetBuffer,
-                             juce::AudioBuffer<float>& voiceBWetBuffer,
-                             juce::AudioBuffer<float>& outputBuffer) noexcept
+void RoutingEngine::processWet (
+    juce::AudioBuffer<float>& voiceAWetBuffer,
+    juce::AudioBuffer<float>& voiceBWetBuffer,
+    juce::AudioBuffer<float>& wetBuffer) noexcept
 {
-    const int numSamples = dryBuffer.getNumSamples();
-    const int numChannels = dryBuffer.getNumChannels();
+    const int numSamples = wetBuffer.getNumSamples();
+    const int numChannels = wetBuffer.getNumChannels();
+    updateBlockState (numSamples);
+
+    const int limit = std::min (numSamples, maxBlockSize_);
+
+    for (int ch = 0; ch < numChannels; ++ch)
+    {
+        const float* voiceAWet = voiceAWetBuffer.getReadPointer (ch);
+        const float* voiceBWet = voiceBWetBuffer.getReadPointer (ch);
+        float* wetOut = wetBuffer.getWritePointer (ch);
+
+        for (int i = 0; i < limit; ++i)
+        {
+            const float levelA = smoothedLevelA_[i];
+            const float levelB = smoothedLevelB_[i];
+
+            const float N = std::sqrt (std::max (1.0f, levelA * levelA + levelB * levelB));
+            const float wet_source = (levelA * voiceAWet[i] + levelB * voiceBWet[i]) / N;
+            const float wet_target = (levelA * voiceAWet[i] + levelB * voiceBWet[i]) / N;
+
+            const float wet = fadeOldRamp_[i] * wet_source + fadeNewRamp_[i] * wet_target;
+            wetOut[i] = wet * smoothedWetBypassGain_[i];
+        }
+
+        for (int i = limit; i < numSamples; ++i)
+            wetOut[i] = 0.0f;
+    }
+}
+
+void RoutingEngine::mix (const juce::AudioBuffer<float>& dryBuffer,
+                         const juce::AudioBuffer<float>& wetBuffer,
+                         juce::AudioBuffer<float>& outputBuffer) noexcept
+{
+    const int numSamples = outputBuffer.getNumSamples();
+    const int numChannels = outputBuffer.getNumChannels();
     updateBlockState (numSamples);
 
     const int limit = std::min (numSamples, maxBlockSize_);
@@ -330,28 +364,12 @@ void RoutingEngine::process (const juce::AudioBuffer<float>& dryBuffer,
     for (int ch = 0; ch < numChannels; ++ch)
     {
         const float* dry = dryBuffer.getReadPointer (ch);
-        const float* voiceAWet = voiceAWetBuffer.getReadPointer (ch);
-        const float* voiceBWet = voiceBWetBuffer.getReadPointer (ch);
+        const float* wet = wetBuffer.getReadPointer (ch);
         float* out = outputBuffer.getWritePointer (ch);
 
         for (int i = 0; i < limit; ++i)
         {
-            const float levelA = smoothedLevelA_[i];
-            const float levelB = smoothedLevelB_[i];
             const float mixVal = smoothedMix_[i];
-
-            // 1. Combine voice wet signals under wet voice normalization
-            const float N = std::sqrt (std::max (1.0f, levelA * levelA + levelB * levelB));
-            const float wet_source = (levelA * voiceAWet[i] + levelB * voiceBWet[i]) / N;
-            const float wet_target = (levelA * voiceAWet[i] + levelB * voiceBWet[i]) / N;
-
-            // Apply dedicated wet-path crossfade ramp (even if they are identical in formula,
-            // this formally maps to the crossfade behavior of the two topologies).
-            const float wet = fadeOldRamp_[i] * wet_source + fadeNewRamp_[i] * wet_target;
-
-            const float wetBypassed = wet * smoothedWetBypassGain_[i];
-
-            // 2. Global mixing
             float dryGain = 0.0f;
             float wetGain = 1.0f;
 
@@ -361,16 +379,23 @@ void RoutingEngine::process (const juce::AudioBuffer<float>& dryBuffer,
                 wetGain = std::sin (mixVal * pi_2);
             }
 
-            out[i] = dryGain * dry[i] + wetGain * wetBypassed;
+            out[i] = dryGain * dry[i] + wetGain * wet[i];
         }
 
-        // Fill safety limit excess if any
         for (int i = limit; i < numSamples; ++i)
             out[i] = dry[i];
     }
 
-    // Reset update state at end of block
     smoothersUpdatedForBlock_ = false;
+}
+
+void RoutingEngine::process (const juce::AudioBuffer<float>& dryBuffer,
+                             juce::AudioBuffer<float>& voiceAWetBuffer,
+                             juce::AudioBuffer<float>& voiceBWetBuffer,
+                             juce::AudioBuffer<float>& outputBuffer) noexcept
+{
+    processWet (voiceAWetBuffer, voiceBWetBuffer, outputBuffer);
+    mix (dryBuffer, outputBuffer, outputBuffer);
 }
 
 } // namespace shredspace

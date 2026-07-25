@@ -5,6 +5,11 @@
 #include "Parameters/ParameterIDs.h"
 #include "Parameters/ParameterLayout.h"
 #include "Parameters/ParameterSnapshot.h"
+#include "DSP/DelayTimeController.h"
+#include "DSP/DelayVoice.h"
+#include "DSP/RoutingEngine.h"
+#include "DSP/SafetyProcessor.h"
+#include "DSP/StereoProcessor.h"
 
 class ShredSpaceAudioProcessorEditor;
 
@@ -42,8 +47,25 @@ public:
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }
 
 private:
+    static constexpr int kProcessingChannels = 2;
+
     juce::AudioProcessorValueTreeState apvts;
     shredspace::ParameterSnapshot parameterSnapshot;
+    shredspace::DelayTimeController delayTimeController;
+    shredspace::DelayVoice delayVoiceA;
+    shredspace::DelayVoice delayVoiceB;
+    shredspace::RoutingEngine routingEngine;
+    shredspace::StereoProcessor stereoProcessor;
+    shredspace::SafetyProcessor safetyProcessor;
+
+    juce::AudioBuffer<float> dryBuffer;
+    juce::AudioBuffer<float> voiceABuffer;
+    juce::AudioBuffer<float> voiceBBuffer;
+    juce::AudioBuffer<float> wetBuffer;
+    juce::AudioBuffer<float> mixBuffer;
+
+    int maximumBlockSize { 1 };
+    bool clearDelayBuffersAtNextBlock {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShredSpaceAudioProcessor)
 };

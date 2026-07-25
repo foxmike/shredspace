@@ -65,6 +65,16 @@ void DelayVoice::setT60Target (double T60GlobalSeconds) noexcept
     feedbackController_.setT60Target (T60GlobalSeconds);
 }
 
+void DelayVoice::setCrossFeedback (float q) noexcept
+{
+    feedbackController_.setCrossFeedback (q);
+}
+
+void DelayVoice::setFeedbackGainCeiling (float ceiling) noexcept
+{
+    feedbackController_.setFeedbackGainCeiling (ceiling);
+}
+
 void DelayVoice::setSaturationAmount (float s) noexcept
 {
     leftSaturator_.setAmount (s);
@@ -104,9 +114,11 @@ void DelayVoice::process (float* left,
     {
         const double delayTimeSeconds =
             leftDelay_.getCurrentDelaySamples() / sampleRate_;
-        const float normalFeedbackGain = static_cast<float> (
-            feedbackController_.processSample (delayTimeSeconds,
-                                               tailScaleVoice));
+        const auto normalFeedback = feedbackController_.processStereoSample (
+            previousNormalLoopOutputLeft_,
+            previousNormalLoopOutputRight_,
+            delayTimeSeconds,
+            tailScaleVoice);
 
         const double normalWeight =
             std::cos (kPiOverTwo * holdCrossfade_);
@@ -114,10 +126,8 @@ void DelayVoice::process (float* left,
             std::sin (kPiOverTwo * holdCrossfade_);
 
         // The fixed Hold gain is itself the unconditional hard ceiling.
-        const float normalFeedbackLeft =
-            previousNormalLoopOutputLeft_ * normalFeedbackGain;
-        const float normalFeedbackRight =
-            previousNormalLoopOutputRight_ * normalFeedbackGain;
+        const float normalFeedbackLeft = normalFeedback.left;
+        const float normalFeedbackRight = normalFeedback.right;
         const float holdFeedbackLeft =
             previousHoldLoopOutputLeft_ * kHoldFeedbackGain;
         const float holdFeedbackRight =
