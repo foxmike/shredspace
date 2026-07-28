@@ -56,6 +56,8 @@ void AdaptiveController::reset() noexcept
     publishedGeneration_.store (0, std::memory_order_relaxed);
     contractionTelemetry_.store (0.0f, std::memory_order_relaxed);
     bloomTelemetry_.store (0.0f, std::memory_order_relaxed);
+    bloomHoldSamplesRemaining_ = 0;
+    heldBloomTarget_ = 0.0f;
 }
 
 void AdaptiveController::setMode (Mode newMode) noexcept
@@ -86,6 +88,8 @@ void AdaptiveController::process (float density,
     if (mode == Mode::Off)
     {
         clearAllDestinations();
+        bloomHoldSamplesRemaining_ = 0;
+        heldBloomTarget_ = 0.0f;
         contractionTelemetry_.store (0.0f, std::memory_order_relaxed);
         bloomTelemetry_.store (0.0f, std::memory_order_relaxed);
         publish (Mode::Off, {});
@@ -101,6 +105,8 @@ void AdaptiveController::process (float density,
         clearDestination (softeningSmoother_);
         clearDestination (diffusionSmoother_);
         wetSmoother_.bloom.value = 0.0f;
+        bloomHoldSamplesRemaining_ = 0;
+        heldBloomTarget_ = 0.0f;
 
         const float contractionTarget = clamp01 (inputActivity) * clamp01 (definition_);
         const float wetContraction =
@@ -122,12 +128,31 @@ void AdaptiveController::process (float density,
                     1.0f);
     const float contraction = C_target * clamp01 (definition_);
 
-    const float B_target =
+    const float rawBloomTarget =
         std::clamp (sustainWeight_ * sustain + gapWeight_ * phraseGap,
                     0.0f,
                     1.0f)
         * (1.0f - contraction);
-    const float bloom = B_target * clamp01 (bloomAmount_);
+    const float scaledBloomTarget =
+        rawBloomTarget * clamp01 (bloomAmount_);
+
+    if (scaledBloomTarget >= heldBloomTarget_)
+    {
+        heldBloomTarget_ = scaledBloomTarget;
+        bloomHoldSamplesRemaining_ = static_cast<int> (
+            bloomHoldMs_ * 0.001f * static_cast<float> (analysisSampleRate));
+    }
+    else if (bloomHoldSamplesRemaining_ > 0)
+    {
+        bloomHoldSamplesRemaining_ =
+            std::max (0, bloomHoldSamplesRemaining_ - numAnalysisSamples);
+    }
+    else
+    {
+        heldBloomTarget_ = scaledBloomTarget;
+    }
+
+    const float bloom = heldBloomTarget_;
 
     const float wetC =
         advance (wetSmoother_.contraction, contraction, numAnalysisSamples);
@@ -221,6 +246,27 @@ void AdaptiveController::setDefinition (float amount) noexcept
 void AdaptiveController::setBloomAmount (float amount) noexcept
 {
     bloomAmount_ = clamp01 (amount);
+}
+
+void AdaptiveController::setTimeConstants (float contractionAttackMs,
+                                           float contractionReleaseMs,
+                                           float bloomAttackMs,
+                                           float bloomHoldMs,
+                                           float bloomReleaseMs) noexcept
+{
+    prepareDestination (wetSmoother_, contractionAttackMs, contractionReleaseMs,
+                        bloomAttackMs, bloomReleaseMs);
+    prepareDestination (tailSmoother_, contractionAttackMs, contractionReleaseMs,
+                        bloomAttackMs, bloomReleaseMs);
+    prepareDestination (toneSmoother_, contractionAttackMs, contractionReleaseMs,
+                        bloomAttackMs, bloomReleaseMs);
+    prepareDestination (widthSmoother_, contractionAttackMs, contractionReleaseMs,
+                        bloomAttackMs, bloomReleaseMs);
+    prepareDestination (softeningSmoother_, contractionAttackMs, contractionReleaseMs,
+                        bloomAttackMs, bloomReleaseMs);
+    prepareDestination (diffusionSmoother_, contractionAttackMs, contractionReleaseMs,
+                        bloomAttackMs, bloomReleaseMs);
+    bloomHoldMs_ = std::max (0.0f, bloomHoldMs);
 }
 
 void AdaptiveController::setFusionWeights (float densityWeight,

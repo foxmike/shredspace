@@ -5,6 +5,7 @@
 #include "Parameters/ParameterIDs.h"
 #include "Parameters/ParameterLayout.h"
 #include "Parameters/ParameterSnapshot.h"
+#include "Parameters/MacroEngine.h"
 #include "DSP/DelayTimeController.h"
 #include "DSP/DelayVoice.h"
 #include "DSP/RoutingEngine.h"
@@ -16,6 +17,7 @@
 #include "Analysis/DensityEstimator.h"
 #include "Analysis/SustainEstimator.h"
 #include "Analysis/AdaptiveController.h"
+#include "Profiles/SceneManager.h"
 
 class ShredSpaceAudioProcessorEditor;
 
@@ -62,6 +64,8 @@ private:
     shredspace::DelayVoice delayVoiceA;
     shredspace::DelayVoice delayVoiceB;
     shredspace::RoutingEngine routingEngine;
+    shredspace::StereoProcessor voiceStereoA;
+    shredspace::StereoProcessor voiceStereoB;
     shredspace::StereoProcessor stereoProcessor;
     shredspace::SafetyProcessor safetyProcessor;
 
@@ -70,6 +74,8 @@ private:
     shredspace::DensityEstimator densityEstimator;
     shredspace::SustainEstimator sustainEstimator;
     shredspace::AdaptiveController adaptiveController;
+    shredspace::MacroEngine macroEngine;
+    shredspace::SceneManager sceneManager;
     shredspace::TelemetryState telemetry;
 
     juce::AudioBuffer<float> dryBuffer;

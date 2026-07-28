@@ -3,6 +3,7 @@
 #include "DSP/DelayTimeController.h"
 #include "DSP/FeedbackController.h"
 #include "DSP/FractionalDelay.h"
+#include "DSP/ModulationEngine.h"
 #include "DSP/RepeatToneProcessor.h"
 #include "DSP/PresenceGuard.h"
 #include "DSP/RepeatTransientSoftener.h"
@@ -53,6 +54,19 @@ public:
     /** Sets the in-loop diffusion amount in [0, 0.40]. */
     void setDiffusionAmount (float d) noexcept;
 
+    /** Configures the repeat-loop tone and dynamic shaping stages. */
+    void setHighPassFrequency (float hz);
+    void setLowPassFrequency (float hz);
+    void setPresenceGuard (float frequencyHz, float maximumCutDb);
+    void setAttackSoften (float amountPercent, float crossoverHz);
+
+    /** Configures stereo delay-time motion and the right-channel offset. */
+    void setModulation (float rateHz,
+                        float depthMs,
+                        float phaseDegrees,
+                        float driftAmount,
+                        float stereoOffsetMs) noexcept;
+
     /**
      * Engages or releases the dedicated Hold preservation loop.
      * Both transitions use a 30 ms equal-power crossfade.
@@ -85,6 +99,7 @@ private:
     FractionalDelay leftDelay_;
     FractionalDelay rightDelay_;
     FeedbackController feedbackController_;
+    ModulationEngine modulationEngine_;
 
     RepeatToneProcessor repeatTone_;
     PresenceGuard presenceGuard_;
@@ -98,6 +113,7 @@ private:
     static constexpr double kHoldDcBlockerR = 0.995;
 
     double sampleRate_ { 1.0 };
+    double stereoOffsetSamples_ {};
     float previousNormalLoopOutputLeft_ {};
     float previousNormalLoopOutputRight_ {};
     float previousHoldLoopOutputLeft_ {};

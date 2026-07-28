@@ -80,6 +80,13 @@ public:
     void setDefinition (float amount) noexcept;
     void setBloomAmount (float amount) noexcept;
 
+    /** Updates response timing without clearing the running envelopes. */
+    void setTimeConstants (float contractionAttackMs,
+                           float contractionReleaseMs,
+                           float bloomAttackMs,
+                           float bloomHoldMs,
+                           float bloomReleaseMs) noexcept;
+
     void setFusionWeights (float densityWeight,
                            float onsetWeight,
                            float sustainWeight,
@@ -198,6 +205,9 @@ private:
     float widthExpansion_ { 0.30f };
     float softeningIncrease_ { 0.45f };
     float diffusionIncrease_ { 0.12f };
+    float bloomHoldMs_ { 350.0f };
+    int bloomHoldSamplesRemaining_ {};
+    float heldBloomTarget_ {};
 };
 
 } // namespace shredspace

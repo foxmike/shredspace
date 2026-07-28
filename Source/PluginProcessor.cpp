@@ -77,6 +77,8 @@ void ShredSpaceAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     delayVoiceA.prepare (sampleRate, maximumBlockSize);
     delayVoiceB.prepare (sampleRate, maximumBlockSize);
     routingEngine.prepare (sampleRate, maximumBlockSize, kProcessingChannels);
+    voiceStereoA.prepare (sampleRate, maximumBlockSize);
+    voiceStereoB.prepare (sampleRate, maximumBlockSize);
     stereoProcessor.prepare (sampleRate, maximumBlockSize);
     safetyProcessor.prepare (sampleRate, maximumBlockSize, kProcessingChannels);
 
@@ -86,6 +88,64 @@ void ShredSpaceAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     densityEstimator.prepare();
     sustainEstimator.prepare();
     adaptiveController.prepare();
+    macroEngine.prepare (sampleRate, maximumBlockSize);
+
+    // The engine evaluates fixed-size destination tables on the audio thread;
+    // profile/scene controls only supply normalized macro positions.
+    const std::array<shredspace::MacroDestination, 5> definitionTable {{
+        { {}, 0.0f, 2.0f, 1.0f },   // voice wet dB
+        { {}, 0.0f, 0.50f, 1.0f },  // HPF octaves
+        { {}, 0.0f, 0.35f, 1.0f },  // LPF octaves
+        { {}, 0.0f, 4.0f, 1.0f },   // presence cut dB
+        { {}, 0.0f, -0.15f, 1.0f }  // attack softening
+    }};
+    const std::array<shredspace::MacroDestination, 3> bloomTable {{
+        { {}, 0.0f, 3.0f, 1.0f },   // voice wet dB
+        { {}, 0.0f, 0.75f, 1.0f },  // T60 octaves
+        { {}, 0.0f, 0.10f, 1.0f }   // diffusion
+    }};
+    const std::array<shredspace::MacroDestination, 5> focusTable {{
+        { {}, 0.0f, -0.50f, 1.0f }, // width
+        { {}, 0.0f, 0.40f, 1.0f },  // HPF octaves
+        { {}, 0.0f, -0.30f, 1.0f }, // LPF octaves
+        { {}, 0.0f, 3.0f, 1.0f },   // presence cut dB
+        { {}, 0.0f, 0.20f, 1.0f }   // attack softening
+    }};
+    const std::array<shredspace::MacroDestination, 5> widthTable {{
+        { {}, 0.0f, 0.35f, 1.0f },  // outward pan
+        { {}, -0.35f, 0.60f, 1.0f },// width
+        { {}, 0.0f, 6.0f, 1.0f },   // stereo offset ms
+        { {}, 0.0f, 0.15f, 1.0f },  // cross feedback
+        { {}, 0.0f, 45.0f, 1.0f }   // modulation phase
+    }};
+    const std::array<shredspace::MacroDestination, 6> characterTable {{
+        { {}, 0.0f, 0.45f, 1.0f },  // saturation
+        { {}, 0.0f, 1.50f, 1.0f },  // modulation depth ms
+        { {}, 0.0f, 0.25f, 1.0f },  // drift
+        { {}, 0.0f, 0.12f, 1.0f },  // diffusion
+        { {}, 0.0f, 0.15f, 1.0f },  // attack softening
+        { {}, 0.0f, -0.35f, 1.0f }  // LPF octaves
+    }};
+    macroEngine.setDestinationTable (shredspace::MacroId::DEFINITION, definitionTable);
+    macroEngine.setDestinationTable (shredspace::MacroId::BLOOM, bloomTable);
+    macroEngine.setDestinationTable (shredspace::MacroId::FOCUS, focusTable);
+    macroEngine.setDestinationTable (shredspace::MacroId::WIDTH, widthTable);
+    macroEngine.setDestinationTable (shredspace::MacroId::CHARACTER, characterTable);
+
+    // Built-in scene snapshots remain internal deltas: APVTS base values are
+    // never rewritten by morphing.
+    std::array<shredspace::SceneValues, shredspace::kSceneCount> scenes {};
+    scenes[0].macroTargets = { 0.35f, 0.25f, 0.80f, 0.25f, 0.50f, 0.80f, 0.35f, 0.20f };
+    scenes[1].macroTargets = { 0.50f, 0.55f, 0.65f, 0.50f, 0.60f, 0.55f, 0.65f, 0.40f };
+    scenes[2].macroTargets = { 0.60f, 0.80f, 0.45f, 0.90f, 0.80f, 0.35f, 0.90f, 0.55f };
+    scenes[3].macroTargets = { 0.45f, 0.65f, 0.55f, 0.70f, 0.70f, 0.45f, 0.75f, 0.85f };
+    scenes[0].mixTarget = 0.18f; scenes[0].routingTarget = 0;
+    scenes[1].mixTarget = 0.25f; scenes[1].routingTarget = 0;
+    scenes[2].mixTarget = 0.32f; scenes[2].routingTarget = 1;
+    scenes[3].mixTarget = 0.28f; scenes[3].routingTarget = 2;
+    sceneManager.registerEngines (&routingEngine, &delayTimeController);
+    sceneManager.setSceneValues (scenes);
+    sceneManager.prepare (sampleRate, maximumBlockSize);
     telemetry.prepare();
 
     dryBuffer.setSize (kProcessingChannels, maximumBlockSize, false, true, true);
@@ -161,6 +221,45 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                         totalNumInputChannels > 1 ? 1 : 0,
                         0, numSamples);
 
+    const auto normalizedPercent = [] (float percent) noexcept {
+        return std::clamp (percent * 0.01f, 0.0f, 1.0f);
+    };
+    const float sceneWeight = normalizedPercent (parameters.sceneMorphPercent);
+    sceneManager.setMorphPosition (parameters.sceneSelect,
+                                   parameters.sceneMorphPercent);
+
+    const std::array<float, 8> baseMacros {
+        std::clamp ((parameters.macroTimeMs - 20.0f) / 1980.0f, 0.0f, 1.0f),
+        normalizedPercent (parameters.macroSpacePercent),
+        normalizedPercent (parameters.macroDefinitionPercent),
+        normalizedPercent (parameters.macroBloomPercent),
+        std::clamp ((parameters.macroTailSeconds - 0.15f) / 11.85f, 0.0f, 1.0f),
+        normalizedPercent (parameters.macroFocusPercent),
+        normalizedPercent (parameters.macroWidthPercent),
+        normalizedPercent (parameters.macroCharacterPercent)
+    };
+    std::array<float, 8> effectiveMacros {};
+    for (std::size_t macroIndex = 0; macroIndex < effectiveMacros.size(); ++macroIndex)
+    {
+        const auto macro = static_cast<shredspace::MacroId> (macroIndex);
+        effectiveMacros[macroIndex] = std::clamp (
+            baseMacros[macroIndex]
+                + sceneWeight * sceneManager.getSceneDelta (
+                    macro, baseMacros[macroIndex]),
+            0.0f, 1.0f);
+        macroEngine.setMacroValue (macro, effectiveMacros[macroIndex]);
+    }
+    macroEngine.processDeltas (numSamples);
+
+    const float effectiveMacroTimeMs = std::clamp (
+        parameters.macroTimeMs
+            * std::exp2 (2.0f * (effectiveMacros[0] - baseMacros[0])),
+        20.0f, 2000.0f);
+    const float effectiveMacroTailSeconds = std::clamp (
+        parameters.macroTailSeconds
+            * std::exp2 (4.0f * (effectiveMacros[4] - baseMacros[4])),
+        0.15f, 12.0f);
+
     // --- Sidechain Analysis ---
     {
         // 1. Configure parameters
@@ -173,11 +272,19 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         sustainEstimator.setSustainFull (parameters.intelligence.sustainFullMs * 0.001f);
         sustainEstimator.setGapDuration (parameters.intelligence.phraseGapMs * 0.001f);
 
-        onsetDetector.setThreshold (parameters.intelligence.sensitivityPercent * 0.01f);
+        // Higher user sensitivity lowers the detector's internal score bias.
+        onsetDetector.setThreshold (
+            1.0f - parameters.intelligence.sensitivityPercent * 0.01f);
         onsetDetector.setNoiseGateDb (parameters.intelligence.inputGateDb);
 
-        adaptiveController.setBloomAmount (parameters.macroBloomPercent * 0.01f);
-        adaptiveController.setDefinition (parameters.macroDefinitionPercent * 0.01f);
+        adaptiveController.setBloomAmount (effectiveMacros[3]);
+        adaptiveController.setDefinition (effectiveMacros[2]);
+        adaptiveController.setTimeConstants (
+            parameters.intelligence.contractionAttackMs,
+            parameters.intelligence.contractionReleaseMs,
+            parameters.intelligence.bloomRiseMs,
+            parameters.intelligence.bloomHoldMs,
+            parameters.intelligence.bloomReleaseMs);
 
         shredspace::AdaptiveController::Mode mode = shredspace::AdaptiveController::Mode::Off;
         if (parameters.adaptiveMode == 1)
@@ -285,7 +392,7 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     shredspace::ControllerInput timingInput;
     timingInput.timeMode = parameters.timeMode;
     timingInput.syncDivision = parameters.syncDivision;
-    timingInput.macroTimeMs = parameters.macroTimeMs;
+    timingInput.macroTimeMs = effectiveMacroTimeMs;
     timingInput.timeGlideMs = parameters.timeGlideMs;
     timingInput.voiceA.timeRatio = parameters.voiceA.timeRatio;
     timingInput.voiceA.fineOffsetMs = parameters.voiceA.fineOffsetMs;
@@ -294,14 +401,18 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     timingInput.sceneIndex = parameters.sceneSelect;
     const auto delayTargets = delayTimeController.update (timingInput, hostTiming);
 
+    const int effectiveRouting =
+        sceneWeight >= 0.5f
+            ? sceneManager.getActiveRouting()
+            : parameters.routing;
     const auto topology = static_cast<shredspace::RoutingEngine::Topology> (
-        std::clamp (parameters.routing, 0, 2));
+        std::clamp (effectiveRouting, 0, 2));
     routingEngine.setTopology (topology);
     routingEngine.setCascade (parameters.routingCascadePercent * 0.01f);
-    routingEngine.setVoiceLevels (
-        parameters.voiceA.enabled ? parameters.voiceA.levelGain : 0.0f,
-        parameters.voiceB.enabled ? parameters.voiceB.levelGain : 0.0f);
-    routingEngine.setMix (parameters.mixPercent * 0.01f);
+    const float baseMix = parameters.mixPercent * 0.01f;
+    routingEngine.setMix (std::clamp (
+        baseMix + sceneWeight * sceneManager.getMixDelta (baseMix),
+        0.0f, 1.0f));
     routingEngine.setMixMode (
         parameters.mixMode == 0 ? shredspace::RoutingEngine::MixMode::Insert
                                 : shredspace::RoutingEngine::MixMode::Send);
@@ -312,14 +423,143 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                    ? shredspace::RoutingEngine::BypassMode::Hard
                    : shredspace::RoutingEngine::BypassMode::Trails));
 
-    delayVoiceA.setT60Target (parameters.macroTailSeconds);
-    delayVoiceB.setT60Target (parameters.macroTailSeconds);
-    delayVoiceA.setCrossFeedback (parameters.voiceA.crossFeedbackPercent * 0.01f);
-    delayVoiceB.setCrossFeedback (parameters.voiceB.crossFeedbackPercent * 0.01f);
-    delayVoiceA.setSaturationAmount (parameters.voiceA.saturationPercent * 0.01f);
-    delayVoiceB.setSaturationAmount (parameters.voiceB.saturationPercent * 0.01f);
-    delayVoiceA.setDiffusionAmount (parameters.voiceA.diffusionPercent * 0.01f);
-    delayVoiceB.setDiffusionAmount (parameters.voiceB.diffusionPercent * 0.01f);
+    const auto adaptiveA = adaptiveController.getDeltasForVoice (
+        parameters.voiceA.adaptiveRolePercent * 0.01f);
+    const auto adaptiveB = adaptiveController.getDeltasForVoice (
+        parameters.voiceB.adaptiveRolePercent * 0.01f);
+
+    const float definitionWetDb =
+        macroEngine.getMacroDelta (shredspace::MacroId::DEFINITION, 0);
+    const float definitionHpfOct =
+        macroEngine.getMacroDelta (shredspace::MacroId::DEFINITION, 1);
+    const float definitionLpfOct =
+        macroEngine.getMacroDelta (shredspace::MacroId::DEFINITION, 2);
+    const float definitionGuardDb =
+        macroEngine.getMacroDelta (shredspace::MacroId::DEFINITION, 3);
+    const float definitionSoften =
+        macroEngine.getMacroDelta (shredspace::MacroId::DEFINITION, 4);
+    const float bloomWetDb =
+        macroEngine.getMacroDelta (shredspace::MacroId::BLOOM, 0);
+    const float bloomTailOct =
+        macroEngine.getMacroDelta (shredspace::MacroId::BLOOM, 1);
+    const float bloomDiffusion =
+        macroEngine.getMacroDelta (shredspace::MacroId::BLOOM, 2);
+    const float focusWidth =
+        macroEngine.getMacroDelta (shredspace::MacroId::FOCUS, 0);
+    const float focusHpfOct =
+        macroEngine.getMacroDelta (shredspace::MacroId::FOCUS, 1);
+    const float focusLpfOct =
+        macroEngine.getMacroDelta (shredspace::MacroId::FOCUS, 2);
+    const float focusGuardDb =
+        macroEngine.getMacroDelta (shredspace::MacroId::FOCUS, 3);
+    const float focusSoften =
+        macroEngine.getMacroDelta (shredspace::MacroId::FOCUS, 4);
+    const float widthPan =
+        macroEngine.getMacroDelta (shredspace::MacroId::WIDTH, 0);
+    const float widthAmount =
+        macroEngine.getMacroDelta (shredspace::MacroId::WIDTH, 1);
+    const float widthOffsetMs =
+        macroEngine.getMacroDelta (shredspace::MacroId::WIDTH, 2);
+    const float widthCrossFeedback =
+        macroEngine.getMacroDelta (shredspace::MacroId::WIDTH, 3);
+    const float widthPhase =
+        macroEngine.getMacroDelta (shredspace::MacroId::WIDTH, 4);
+    const float characterSaturation =
+        macroEngine.getMacroDelta (shredspace::MacroId::CHARACTER, 0);
+    const float characterModDepth =
+        macroEngine.getMacroDelta (shredspace::MacroId::CHARACTER, 1);
+    const float characterDrift =
+        macroEngine.getMacroDelta (shredspace::MacroId::CHARACTER, 2);
+    const float characterDiffusion =
+        macroEngine.getMacroDelta (shredspace::MacroId::CHARACTER, 3);
+    const float characterSoften =
+        macroEngine.getMacroDelta (shredspace::MacroId::CHARACTER, 4);
+    const float characterLpfOct =
+        macroEngine.getMacroDelta (shredspace::MacroId::CHARACTER, 5);
+
+    const auto configureVoice =
+        [&] (shredspace::DelayVoice& voice,
+             shredspace::StereoProcessor& stereo,
+             const shredspace::ParameterSnapshot::VoiceValues& voiceValues,
+             const shredspace::AdaptiveController::AdaptiveDeltas& adaptive,
+             float panDirection) noexcept
+    {
+        const float wetDb = voiceValues.levelDb + definitionWetDb
+                          + bloomWetDb + adaptive.wetDbDelta;
+        const float wetGain = std::clamp (
+            std::pow (10.0f, wetDb / 20.0f)
+                * (0.75f + 0.5f * effectiveMacros[1]),
+            0.0f, 1.0f);
+        const float effectiveT60 = std::clamp (
+            effectiveMacroTailSeconds
+                * std::exp2 (bloomTailOct + adaptive.t60OctaveDelta),
+            0.15f, 12.0f);
+        const float hpf = std::clamp (
+            voiceValues.hpfHz * std::exp2 (definitionHpfOct + focusHpfOct),
+            40.0f, 1500.0f);
+        const float lpf = std::clamp (
+            voiceValues.lpfHz
+                * std::exp2 (definitionLpfOct + focusLpfOct
+                             + characterLpfOct + adaptive.lpfOctaveDelta),
+            2000.0f, 20000.0f);
+        const float soften = std::clamp (
+            voiceValues.attackSoftenPercent * 0.01f
+                + definitionSoften + focusSoften + characterSoften
+                + adaptive.softeningDelta,
+            0.0f, 1.0f);
+        const float diffusion = std::clamp (
+            voiceValues.diffusionPercent * 0.01f
+                + bloomDiffusion + characterDiffusion
+                + 0.08f * effectiveMacros[1] + adaptive.diffusionDelta,
+            0.0f, 0.40f);
+
+        voice.setT60Target (effectiveT60);
+        voice.setHighPassFrequency (hpf);
+        voice.setLowPassFrequency (lpf);
+        voice.setPresenceGuard (
+            voiceValues.presenceFrequencyHz,
+            std::clamp (voiceValues.presenceGuardDb
+                        + definitionGuardDb + focusGuardDb,
+                        0.0f, 12.0f));
+        voice.setAttackSoften (
+            soften * 100.0f,
+            parameters.intelligence.transientCrossoverHz);
+        voice.setCrossFeedback (std::clamp (
+            voiceValues.crossFeedbackPercent * 0.01f + widthCrossFeedback,
+            0.0f, 1.0f));
+        voice.setSaturationAmount (std::clamp (
+            voiceValues.saturationPercent * 0.01f + characterSaturation,
+            0.0f, 1.0f));
+        voice.setDiffusionAmount (diffusion);
+        voice.setModulation (
+            voiceValues.modulationRateHz,
+            std::clamp (voiceValues.modulationDepthMs + characterModDepth,
+                        0.0f, 8.0f),
+            std::clamp (voiceValues.modulationPhaseDegrees + widthPhase,
+                        0.0f, 180.0f),
+            std::clamp (voiceValues.driftPercent * 0.01f + characterDrift,
+                        0.0f, 1.0f),
+            std::clamp (voiceValues.stereoOffsetMs + widthOffsetMs,
+                        0.0f, 30.0f));
+
+        stereo.setPan (std::clamp (
+            voiceValues.pan * 0.01f + panDirection * widthPan,
+            -1.0f, 1.0f));
+        stereo.setWidth (std::clamp (
+            voiceValues.widthPercent * 0.01f + widthAmount + focusWidth
+                + adaptive.widthDelta,
+            0.0f, 2.0f));
+        stereo.setLowFrequencyMonoEnabled (false);
+        return wetGain;
+    };
+
+    const float voiceALevel = configureVoice (
+        delayVoiceA, voiceStereoA, parameters.voiceA, adaptiveA, -1.0f);
+    const float voiceBLevel = configureVoice (
+        delayVoiceB, voiceStereoB, parameters.voiceB, adaptiveB, 1.0f);
+    routingEngine.setVoiceLevels (
+        parameters.voiceA.enabled ? voiceALevel : 0.0f,
+        parameters.voiceB.enabled ? voiceBLevel : 0.0f);
     delayVoiceA.setHold (parameters.hold);
     delayVoiceB.setHold (parameters.hold);
 
@@ -337,6 +577,9 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                              numSamples, delayTargets[0],
                              parameters.timeGlideMs,
                              parameters.voiceA.tailScale);
+        voiceStereoA.process (voiceABlock.getWritePointer (0),
+                              voiceABlock.getWritePointer (1),
+                              numSamples);
     };
 
     const auto processVoiceB = [&] {
@@ -348,6 +591,9 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                              numSamples, delayTargets[1],
                              parameters.timeGlideMs,
                              parameters.voiceB.tailScale);
+        voiceStereoB.process (voiceBBlock.getWritePointer (0),
+                              voiceBBlock.getWritePointer (1),
+                              numSamples);
     };
 
     if (routingEngine.shouldProcessVoiceAFirst())
@@ -364,7 +610,7 @@ void ShredSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // Wet routing/topology, then stereo placement, then mandatory safety.
     routingEngine.processWet (voiceABlock, voiceBBlock, wetBlock);
 
-    stereoProcessor.setWidth (parameters.macroWidthPercent * 0.02f);
+    stereoProcessor.setWidth (effectiveMacros[6] * 2.0f);
     stereoProcessor.setLowFrequencyMonoEnabled (parameters.lfMono);
     stereoProcessor.setLowFrequencyMonoCrossover (parameters.lfMonoFrequencyHz);
     stereoProcessor.process (wetBlock.getWritePointer (0),

@@ -22,6 +22,7 @@ void DelayVoice::prepare (double sampleRate, int maxBlockSize)
     leftDelay_.prepare (sampleRate_, maxBlockSize);
     rightDelay_.prepare (sampleRate_, maxBlockSize);
     feedbackController_.prepare (sampleRate_);
+    modulationEngine_.prepare (sampleRate_, maxBlockSize);
 
     // The repeat-loop processors are stereo (left = channel 0, right = 1).
     repeatTone_.prepare (sampleRate_, maxBlockSize, 2);
@@ -41,6 +42,7 @@ void DelayVoice::reset() noexcept
     leftDelay_.reset();
     rightDelay_.reset();
     feedbackController_.reset();
+    modulationEngine_.reset();
     repeatTone_.reset();
     presenceGuard_.reset();
     repeatSoftener_.reset();
@@ -86,6 +88,46 @@ void DelayVoice::setDiffusionAmount (float d) noexcept
     shortDiffuser_.setAmount (d);
 }
 
+void DelayVoice::setHighPassFrequency (float hz)
+{
+    repeatTone_.setHighPassFrequency (hz);
+}
+
+void DelayVoice::setLowPassFrequency (float hz)
+{
+    repeatTone_.setLowPassFrequency (hz);
+}
+
+void DelayVoice::setPresenceGuard (float frequencyHz, float maximumCutDb)
+{
+    presenceGuard_.setPresenceFrequency (frequencyHz);
+    presenceGuard_.setMaxCutDb (maximumCutDb);
+    presenceGuard_.setEffectiveMaxCutDb (maximumCutDb);
+}
+
+void DelayVoice::setAttackSoften (float amountPercent, float crossoverHz)
+{
+    repeatSoftener_.setAmountPercent (amountPercent);
+    repeatSoftener_.setCrossoverFrequency (crossoverHz);
+}
+
+void DelayVoice::setModulation (float rateHz,
+                                float depthMs,
+                                float phaseDegrees,
+                                float driftAmount,
+                                float stereoOffsetMs) noexcept
+{
+    modulationEngine_.setRate (rateHz);
+    modulationEngine_.setDepth (depthMs);
+    modulationEngine_.setPhaseOffset (phaseDegrees);
+    modulationEngine_.setDriftAmount (
+        std::clamp (driftAmount, 0.0f, 1.0f)
+        * static_cast<float> (ModulationEngine::kMaximumDepthSeconds));
+    stereoOffsetSamples_ =
+        std::clamp (static_cast<double> (stereoOffsetMs), 0.0, 30.0)
+        * 0.001 * sampleRate_;
+}
+
 void DelayVoice::setHold (bool shouldHold) noexcept
 {
     holdRequested_ = shouldHold;
@@ -112,6 +154,11 @@ void DelayVoice::process (float* left,
 
     for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
     {
+        const auto modulation = modulationEngine_.processSample();
+        leftDelay_.setModulationOffsetSamples (modulation[0]);
+        rightDelay_.setModulationOffsetSamples (
+            modulation[1] + stereoOffsetSamples_);
+
         const double delayTimeSeconds =
             leftDelay_.getCurrentDelaySamples() / sampleRate_;
         const auto normalFeedback = feedbackController_.processStereoSample (
