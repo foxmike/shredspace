@@ -1,7 +1,10 @@
-# ShredSpace — Operations Guide
+# ShredSpace — Operations Manual
 
-## Purpose
+## Plugin Overview
 ShredSpace is a performance-responsive dual-voice stereo delay designed specifically for articulate high-gain lead guitar. Using a real-time spectral onset and performance analyzer, it continuously adapts delay parameters based on note density and sustain. During fast, dense runs, it ducks repeat levels, darkens tone, and contracts the stereo image to prevent muddiness. During sustained notes and phrase pauses, it expands the tail, lifts output levels, opens high frequencies, and widens the stereo image to create a rich sense of space.
+
+## Intended Use
+ShredSpace is designed for high-gain lead guitar tracks to dynamically adapt delay tails to performance speed and style, ensuring fast runs remain clear while sustained notes are rich and spacious.
 
 ## Signal Flow
 1. **Input Gain (`GLOBAL_INPUT_GAIN`)**: Scales incoming mono or stereo PCM audio.
@@ -28,10 +31,7 @@ ShredSpace is a performance-responsive dual-voice stereo delay designed specific
 8. **Global Mix (`GLOBAL_MIX`)**: Blends dry and wet paths based on Insert or Send modes (`GLOBAL_MIX_MODE`).
 9. **Output Stage (`GLOBAL_OUTPUT_GAIN`)**: Applies master output level and safety limiting.
 
----
-
-## Controls Reference
-
+## Controls and Parameters
 Grouped by interface tabs:
 
 ### Global Controls
@@ -59,8 +59,8 @@ Grouped by interface tabs:
 - **Adaptive Mode**: choice, Off (0), Level (1), Articulation (2), default Articulation. Selects static, standard envelope ducking, or full articulation tracking.
 - **Routing**: choice, Parallel (0), A to B (1), B to A (2), default Parallel.
 - **Routing Cascade**: float, 0.0% to 100.0%, default 50.0%. Scales cascade connection routing gain.
-- **Scene Select**: choice, Scene 1 to 4, default Scene 1. Selects active snapshot.
-- **Scene Morph**: float, 0.0% to 100.0%, default 0.0%. Ramps parameters between current and target scene.
+- **Scene Select**: choice, Scene 1 to 4, default Scene 1. Selects the starting scene for recall and morphing.
+- **Scene Morph**: float, 0.0% to 100.0%, default 0.0%. Morphs from the selected scene toward the next scene. Scene 4 morphs to itself.
 
 ### Voices Tab
 - **Time Mode**: choice, Milliseconds (0), Host Sync (1), Tap (2), default Milliseconds.
@@ -118,25 +118,32 @@ Grouped by interface tabs:
 - **Diffusion Increase**: float, 0.0% to 30.0%, default 12.0%. Added repeat diffusion.
 - **Transient Crossover**: float, 1000.0 to 6000.0 Hz, default 2500.0 Hz. Filter cutoff frequency separating transient analysis bands.
 
----
+## Stereo and Mono Behavior
+Low frequency audio is centered below a crossover point (`STEREO_LF_MONO`, range 60 to 500 Hz) to maintain bass punch and prevent phase cancellation. The rest of the delay voices are panned across the stereo field according to the Voice Pan settings.
 
-## Metering and Visualization
+## Latency and Lookahead
+- The DSP chain operates with zero reported latency.
+- Internal performance analysis runs at a fixed 48 kHz rate via a sample-rate converter, which does not delay the audio dry signal path.
+
+## Bypass Behavior
+Supports true bypass with two modes: Hard (silences output immediately) and Trails (allows tails to decay naturally).
+
+## Presets and State Recall
+ShredSpace relies on a dedicated profile catalog rather than traditional presets. The binary bundles 12 factory profile JSON documents:
+- `BalladBloom`, `BufferBend`, `ControlledCascade`, `DarkHighGain`, `DryCenterArena`, `LegatoSpace`, `MonoRigPolish`, `NeoclassicalFlight`, `PrecisionRack`, `RapidDefinition`, `SingingLead`, and `WideArpeggio`.
+
+Recalling a profile updates the APVTS base parameters on the message thread, while macro mappings are evaluated in real time without altering the base values. Standard DAW session saving and loading are fully supported.
+
+### Scene Recall, Morphing, and Automation
+- Each profile supplies four scene targets for the eight performance macros, Mix, Routing, and Hold behavior. Selecting a profile installs those scene targets along with the profile's base parameters and macro mappings.
+- Scene Morph interpolates continuously from the selected scene to the following scene. Time and Tail use logarithmic interpolation; the other macro targets and Mix use linear interpolation.
+- Discrete Routing and Hold behavior follow the nearer scene and switch at the midpoint of the morph. Spillover, when enabled, preserves existing delay tails across scene changes.
+- Scene Select, Scene Morph, and profile recall are intended for deliberate performance changes. Use moderate host automation rates for scene and profile changes; dense point-by-point automation provides no practical benefit and can add avoidable message-thread work.
+
+## Metering and Visual Feedback
 - **Stereo Level Meters (`MeterComponent`)**: Peak and RMS output bars on a -50 dB to +6 dB scale.
 - **Telemetry Indicators**: Real-time scalar indicators for Onset Activity, Note Density, Sustain Level, Contraction, and Bloom.
 - **Detector Display (`DetectorDisplay`)**: A scrolling timeline rendering onset event triggers (green), note density tracking (yellow), sustain estimation (blue), and phrase gap boundaries over a 512-frame window.
 
-## Preset System
-ShredSpace relies on a dedicated profile catalog rather than traditional presets. The binary bundles 12 factory profile JSON documents:
-- `BalladBloom`, `BufferBend`, `ControlledCascade`, `DarkHighGain`, `DryCenterArena`, `LegatoSpace`, `MonoRigPolish`, `NeoclassicalFlight`, `PrecisionRack`, `RapidDefinition`, `SingingLead`, and `WideArpeggio`.
-Recalling a profile updates the APVTS base parameters on the message thread, while macro mappings are evaluated in real time without altering the base values. Standard DAW session saving and loading are fully supported.
-
-## Latency
-- The DSP chain operates with zero reported latency.
-- Internal performance analysis runs at a fixed 48 kHz rate via a sample-rate converter, which does not delay the audio dry signal path.
-
 ## Supported Formats
 - VST3, LV2, Standalone.
-
-## Known Limitations
-- **Oversampling**: ShredSpace 1.0 does not employ oversampling; high saturation settings may produce minor high-frequency aliasing products under extreme gain conditions.
-- **Parameter Mapping**: Profile morph and scene recall parameters must be handled with care since rapid morph updates on the message thread may cause control-rate thread load in some hosts.
